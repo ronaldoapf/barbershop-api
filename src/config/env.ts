@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 const envSchema = z.object({
   API_URL: z.url(),
+  FRONTEND_URL: z.url(),
   DATABASE_URL: z.url(),
   JWT_SECRET_KEY: z.string(),
   RESEND_API_KEY: z.string(),

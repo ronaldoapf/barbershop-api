@@ -4,6 +4,9 @@ import { UsersRepository } from "../repositories/users.repository"
 import { MailService } from "@/lib/mail";
 import { TokensRepository } from "../repositories/tokens.repository";
 import { TokenType } from "../dtos/create-token-dto";
+import { ConflictError } from "@/errors/app-error";
+import { env } from "@/config/env";
+import { logger } from "@/lib/logger";
 
 export class CreateUserUseCase {
   constructor(
@@ -16,10 +19,13 @@ export class CreateUserUseCase {
     email,
     password
   }: CreateUserDTO) {
+    logger.info({ email }, "Creating new user")
+
     const userWithSameEmail = await this.usersRepository.findByEmail(email)
 
     if (userWithSameEmail) {
-      throw new Error("User with same email already exists.")
+      logger.warn({ email }, "User creation failed: email already exists")
+      throw new ConflictError("User with same email already exists.")
     }
 
     const passwordEncrypter = new PasswordEncrypter();
@@ -32,18 +38,16 @@ export class CreateUserUseCase {
       password: hashedPassword
     })
 
-    console.log(user)
+    logger.info({ userId: user.id, email: user.email }, "User created successfully")
 
     const { token } = await this.tokensRepository.create({
       type: TokenType.EMAIL_VERIFICATION,
       userId: user.id
     })
 
-    console.log(token)
-
     const mailService = new MailService();
 
-    const verifyEmailUrl = `http://localhost:5173/verify-email?token=${token}`
+    const verifyEmailUrl = `${env.FRONTEND_URL}/verify-email?token=${token}`
 
     mailService.sendMail({
       subject: "Welcome to our platform!",
@@ -57,6 +61,8 @@ export class CreateUserUseCase {
         </div>
       `
     })
+
+    logger.debug({ userId: user.id }, "Verification email sent")
 
     return user
   }

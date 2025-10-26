@@ -33,7 +33,7 @@ export class SendAuthCodeUseCase {
     const mail = new MailService()
 
     mail.sendMail({
-      to: env.NODE_ENV === "development" ? "ronaldo.alves.1997@gmail.com" : checkIfUserExists.email,
+      to: checkIfUserExists.email,
       subject: "Your authentication code",
       html,
     })

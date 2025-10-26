@@ -3,6 +3,8 @@ import { ResetPasswordDTO } from "../dtos/reset-password-dto";
 import { TokensRepository } from "../repositories/tokens.repository";
 import { UsersRepository } from "../repositories/users.repository"
 import { isAfter } from "date-fns";
+import { BadRequestError, NotFoundError, UnauthorizedError } from "@/errors/app-error";
+import { logger } from "@/lib/logger";
 
 export class ResetPasswordUseCase {
   constructor(
@@ -10,15 +12,18 @@ export class ResetPasswordUseCase {
     private tokensRepository: TokensRepository
   ) {}
 
-  async execute({ 
+  async execute({
     token,
-    newPassword, 
-    confirmPassword, 
+    newPassword,
+    confirmPassword,
   }: ResetPasswordDTO): Promise<void> {
+    logger.info("Password reset attempt")
+
     const getToken = await this.tokensRepository.findByToken(token)
 
     if(!getToken) {
-      throw new Error("This token is not valid.")
+      logger.warn("Password reset failed: invalid token")
+      throw new NotFoundError("This token is not valid.")
     }
 
     const { expiresAt } = getToken
@@ -26,11 +31,13 @@ export class ResetPasswordUseCase {
     const isTokenExpired = isAfter(new Date(), expiresAt)
 
     if (isTokenExpired) {
-      throw new Error("This token has expired.")
+      logger.warn({ userId: getToken.userId }, "Password reset failed: token expired")
+      throw new UnauthorizedError("This token has expired.")
     }
 
     if(newPassword !== confirmPassword) {
-      throw new Error("Password does not match.")
+      logger.warn({ userId: getToken.userId }, "Password reset failed: passwords do not match")
+      throw new BadRequestError("Password does not match.")
     }
 
     const passwordEncrypter = new PasswordEncrypter()
@@ -41,5 +48,7 @@ export class ResetPasswordUseCase {
       id: getToken.userId,
       password: passwordHashed
     })
+
+    logger.info({ userId: getToken.userId }, "Password reset successful")
   }
 }

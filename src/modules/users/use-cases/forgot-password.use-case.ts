@@ -7,6 +7,8 @@ import { pretty, render } from "@react-email/components";
 import DropboxResetPasswordEmail from "@/emails/ForgotPasswordEmail";
 import { env } from "@/config/env";
 import { Token } from "../dtos/tokens";
+import { NotFoundError } from "@/errors/app-error";
+import { logger } from "@/lib/logger";
 
 export class ForgotPasswordUseCase {
   constructor(
@@ -14,13 +16,16 @@ export class ForgotPasswordUseCase {
     private tokensRepository: TokensRepository
   ) {}
 
-  async execute({ 
-    email, 
+  async execute({
+    email,
   }: RecoveryPasswordDTO): Promise<Token> {
+    logger.info({ email }, "Password recovery requested")
+
     const user = await this.usersRepository.findByEmail(email)
 
     if (!user) {
-      throw new Error("Invalid credetnais")
+      logger.warn({ email }, "Password recovery failed: user not found")
+      throw new NotFoundError("Invalid credentials.")
     }
 
     const token = await this.tokensRepository.create({
@@ -28,7 +33,7 @@ export class ForgotPasswordUseCase {
       userId: user.id
     })
 
-    const recoveryLink = `http://localhost:5173/reset-password?token=${token.token}`
+    const recoveryLink = `${env.FRONTEND_URL}/reset-password?token=${token.token}`
 
     const mailClient = new MailService()
 
@@ -38,11 +43,13 @@ export class ForgotPasswordUseCase {
     })))
 
     mailClient.sendMail({
-      to: env.NODE_ENV === "development" ? "ronaldo.alves.1997@gmail.com" : user.email,
+      to: user.email,
       subject: "Recovery password",
       html: html
     })
-    
+
+    logger.info({ email, userId: user.id }, "Password recovery email sent")
+
     return token;
   }
 }

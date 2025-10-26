@@ -30,14 +30,12 @@ export class MailService {
   async sendMail({ to, text, html, subject }: SendMailProps) {
     const mailClient = await this.getClient();
 
-     const info = await mailClient.sendMail({
+    await mailClient.sendMail({
       from: 'Acme <onboarding@resend.dev>',
       to,
       text,
       html,
       subject,
     })
-
-    console.log(info)
   }
 }

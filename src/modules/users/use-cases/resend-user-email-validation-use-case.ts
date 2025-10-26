@@ -6,6 +6,8 @@ import { MailService } from "@/lib/mail";
 import { TokenType } from "../dtos/create-token-dto";
 import { templateUrl } from "@/utils/template-url";
 import { templateValidateEmail } from "@/utils/template-validate-email";
+import { NotFoundError } from "@/errors/app-error";
+import { env } from "@/config/env";
 
 
 export class ResendUserEmailValidationUseCase {
@@ -19,7 +21,7 @@ export class ResendUserEmailValidationUseCase {
     const user = await this.usersRepository.findByEmail(email)
 
     if (!user) {
-      throw new Error("User not found.")
+      throw new NotFoundError("User not found.")
     }
 
     const getToken = await this.tokensRepository.findByUserId(user.id)
@@ -32,7 +34,7 @@ export class ResendUserEmailValidationUseCase {
       mailService.sendMail({
         subject: "Verify your email to our platform!",
         to: email,
-        html: templateValidateEmail(user.name, templateUrl("http://localhost:5173/", `verify-email?token=${getToken?.token}`))
+        html: templateValidateEmail(user.name, templateUrl(env.FRONTEND_URL, `verify-email?token=${getToken?.token}`))
       })
       return
     }
@@ -45,7 +47,7 @@ export class ResendUserEmailValidationUseCase {
     mailService.sendMail({
       subject: "Verify your email to our platform!",
       to: email,
-      html: templateValidateEmail(user.name, templateUrl("http://localhost:5173/", `verify-email?token=${newToken?.token}`))
+      html: templateValidateEmail(user.name, templateUrl(env.FRONTEND_URL, `verify-email?token=${newToken?.token}`))
     })
   }
 }

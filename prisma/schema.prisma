@@ -18,6 +18,21 @@ enum TokenType {
   PASSWORD_RECOVERY
 }
 
+enum BarberRole {
+  BARBER
+  MANAGER
+  ADMIN
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
 model User {
   id String @id @default(uuid())
 
@@ -30,19 +45,11 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  sessions   Session[]
-  tokens     Token[]
-  userLogins UserLogin[]
-}
+  tokens       Token[]
+  userLogins   UserLogin[]
+  appointments Appointment[]
 
-model Session {
-  id String @id @default(cuid())
-
-  sessionToken String   @unique @map("session_token")
-  userId       String   @map("user_id")
-  expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("users")
 }
 
 model Token {
@@ -79,4 +86,96 @@ model UserLogin {
 
   @@index([userId, code])
   @@map("userlogin")
+}
+
+model Barber {
+  id String @id @default(uuid())
+
+  name         String
+  email        String     @unique
+  password     String
+  phoneNumber  String?    @map("phone_number")
+  role         BarberRole @default(BARBER)
+  isActive     Boolean    @default(true) @map("is_active")
+  profilePhoto String?    @map("profile_photo")
+  bio          String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  appointments Appointment[]
+  services     BarberService[]
+  availability BarberAvailability[]
+
+  @@map("barbers")
+}
+
+model Service {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  duration    Int // minutes
+  price       Int // price in cents (e.g., 1999 = $19.99)
+  isActive    Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  barbers      BarberService[]
+  appointments Appointment[]
+
+  @@map("services")
+}
+
+model BarberService {
+  id          String @id @default(uuid())
+  barberId    String @map("barber_id")
+  serviceId   String @map("service_id")
+  customPrice Int?   @map("custom_price") // price in cents
+
+  barber  Barber  @relation(fields: [barberId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([barberId, serviceId])
+  @@map("barber_services")
+}
+
+model Appointment {
+  id          String            @id @default(uuid())
+  userId      String            @map("user_id")
+  barberId    String            @map("barber_id")
+  serviceId   String            @map("service_id")
+  scheduledAt DateTime          @map("scheduled_at")
+  duration    Int // minutes
+  status      AppointmentStatus @default(SCHEDULED)
+  price       Int // price in cents (e.g., 1999 = $19.99)
+  notes       String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id])
+  barber  Barber  @relation(fields: [barberId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@index([barberId, scheduledAt])
+  @@index([userId])
+  @@map("appointments")
+}
+
+model BarberAvailability {
+  id        String  @id @default(uuid())
+  barberId  String  @map("barber_id")
+  dayOfWeek Int // 0=Sunday, 1=Monday, ..., 6=Saturday
+  startTime String  @map("start_time") // "09:00"
+  endTime   String  @map("end_time") // "18:00"
+  isActive  Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  barber Barber @relation(fields: [barberId], references: [id], onDelete: Cascade)
+
+  @@unique([barberId, dayOfWeek])
+  @@map("barber_availability")
 }

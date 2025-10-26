@@ -2,6 +2,9 @@ import { UsersRepository } from "@/modules/users/repositories/users.repository";
 import { AuthenticateWithCodeDTO } from "../dtos/authenticate-with-code-dto";
 import { UserLoginRepository } from "../repositories/user-login.repository";
 import { isAfter } from "date-fns";
+import { UnauthorizedError } from "@/errors/app-error";
+import { User } from "@/modules/users/dtos/users";
+import { logger } from "@/lib/logger";
 
 export class AuthenticateWithCodeUseCase {
   constructor(
@@ -12,23 +15,28 @@ export class AuthenticateWithCodeUseCase {
   async execute({
     code,
     email,
-  }: AuthenticateWithCodeDTO): Promise<void> {
+  }: AuthenticateWithCodeDTO): Promise<User> {
+    logger.info({ email }, "Code authentication attempt")
+
     const getUser = await this.usersRepository.findByEmail(email)
 
     if (!getUser) {
-      throw new Error("Invalid credentials.")
+      logger.warn({ email }, "Authentication failed: user not found")
+      throw new UnauthorizedError("Invalid credentials.")
     }
 
     const getCode = await this.userLoginRepository.findByUserId(getUser.id)
 
     if (!getCode) {
-      throw new Error("Invalid code.")
+      logger.warn({ email, userId: getUser.id }, "Authentication failed: no code found")
+      throw new UnauthorizedError("Invalid code.")
     }
 
     const isTokenExpiredOrNotValid = isAfter(new Date(), getCode.expiresAt) || getCode.code !== code || !getCode.isValid
 
     if (isTokenExpiredOrNotValid) {
-      throw new Error("This token has expired.")
+      logger.warn({ email, userId: getUser.id }, "Authentication failed: invalid or expired code")
+      throw new UnauthorizedError("This token has expired.")
     }
 
     await this.userLoginRepository.update({
@@ -37,6 +45,8 @@ export class AuthenticateWithCodeUseCase {
       code: getCode.code,
     })
 
-    // TODO: Generate JWT and return to user
+    logger.info({ email, userId: getUser.id }, "Code authentication successful")
+
+    return getUser
   }
 }
