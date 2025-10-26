@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RECOVERY
+}
+
+model User {
+  id String @id @default(uuid())
+
+  name     String
+  email    String @unique
+  password String
+
+  isEmailVerified Boolean @default(false) @map("is_email_verified")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sessions   Session[]
+  tokens     Token[]
+  userLogins UserLogin[]
+}
+
+model Session {
+  id String @id @default(cuid())
+
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Token {
+  id               String    @id @default(uuid())
+  token            String    @unique
+  userId           String
+  type             TokenType
+  hasBeenValidated Boolean   @default(false) @map("has_been_validated")
+
+  expiresAt DateTime @map("expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, token])
+  @@map("tokens")
+}
+
+model UserLogin {
+  id     String @id @default(uuid())
+  code   String
+  userId String
+
+  expiresAt DateTime @map("expires_at")
+
+  isValid Boolean @default(true) @map("is_valid")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, code])
+  @@map("userlogin")
+}
