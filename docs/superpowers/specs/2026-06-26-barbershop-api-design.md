@@ -52,6 +52,7 @@ Cross-module side effects go exclusively through `EventEmitter2`. No module impo
 id, name, email,
 phone (optional for CUSTOMER, required for BARBER/OWNER),
 passwordHash, role (CUSTOMER | BARBER | OWNER),
+loyaltyPoints (integer, default 0 — current balance, only meaningful for CUSTOMER),
 avatarUrl, avatarStorageKey, createdAt, disabledAt
 ```
 
@@ -88,6 +89,8 @@ id, name, order (display position), createdAt, disabledAt
 id, categoryId (FK → categories, nullable),
 name, description, price (integer cents), durationMinutes,
 status (ACTIVE | INACTIVE), order,
+pointsEarned (integer — points credited when this service is in a completed appointment),
+pointsRequired (integer — points needed to redeem this service for free),
 createdAt, disabledAt
 ```
 > `status` is an explicit business toggle (temporary deactivation). `disabledAt` is for permanent soft-delete. `order` controls catalog display sequence.
@@ -97,6 +100,8 @@ A pre-defined bundle of services with its own price (can be discounted vs. sum o
 ```
 id, name, description, price (integer cents),
 status (ACTIVE | INACTIVE), order,
+pointsEarned (integer — points credited when this package is in a completed appointment),
+pointsRequired (integer — points needed to redeem this package for free),
 createdAt, disabledAt
 ```
 
@@ -138,9 +143,19 @@ Always populated, even for package bookings (lists every component service). Sna
 ```
 id, appointmentId (FK → appointments), serviceId (FK → services),
 serviceName (snapshot), price (snapshot, integer cents), durationMinutes (snapshot),
+pointsEarned (snapshot), redeemedWithPoints (boolean, default false),
 createdAt
 ```
 > For package bookings: `totalAmount` = the package price (not sum of individual prices). `AppointmentService` rows list all component services so the barber knows what to perform and the system can compute the expected duration window for conflict detection.
+> `redeemedWithPoints = true` marks the one service in the appointment that was redeemed for free using loyalty points. Its contribution to `totalAmount` is zero.
+
+### `LoyaltyTransactionEntity`
+Audit trail for every loyalty earn and redeem event.
+```
+id, customerId (FK → users), appointmentId (FK → appointments, nullable),
+type (EARN | REDEEM), points (integer),
+description, createdAt
+```
 
 ### `SettingEntity`
 Owner-configurable key-value store.
@@ -152,6 +167,7 @@ id, key (unique string), value (string), updatedAt
 |---|---|---|
 | `cancellation_window_hours` | `"24"` | How many hours before appointment a customer can still cancel/reschedule |
 | `slot_interval_minutes` | `"30"` | Granularity of generated availability slots |
+| `loyalty_enabled` | `"false"` | Global toggle for the loyalty/points system |
 
 ---
 
@@ -225,6 +241,11 @@ id, key (unique string), value (string), updatedAt
 |---|---|---|---|
 | GET | `/settings` | Owner | List all configurable keys + values |
 | PATCH | `/settings` | Owner | Update one or more settings |
+
+### `loyalty` (within `users` module)
+| Method | Path | Access | Description |
+|---|---|---|---|
+| GET | `/users/me/loyalty` | Customer | Points balance + transaction history |
 
 ### `notifications`
 No public endpoints. Purely event-driven internal module.
@@ -315,6 +336,18 @@ PENDING → CONFIRMED → COMPLETED
 - Triggers availability conflict check on the new slot
 - Emits `appointment.rescheduled` event
 
+### Loyalty Points Flow
+
+**At booking (`CreateAppointmentUseCase`):**
+1. If customer submits a `redeemServiceId`, check `loyalty_enabled = true` and `customer.loyaltyPoints ≥ service.pointsRequired`
+2. If valid: set `AppointmentServiceEntity.redeemedWithPoints = true` for that service, subtract its price from `totalAmount`, deduct points from `customer.loyaltyPoints`, create a `LoyaltyTransaction` of type `REDEEM`
+3. Only one service per appointment may be redeemed with points
+
+**At completion (`CompleteAppointmentUseCase`):**
+1. If `loyalty_enabled = true`, sum `pointsEarned` across all `AppointmentService` rows (snapshot field)
+2. Add total to `customer.loyaltyPoints`, create a `LoyaltyTransaction` of type `EARN`
+3. If appointment is later cancelled after completion — points earned are **not** reversed (owner handles edge cases manually)
+
 ---
 
 ## 9. Notifications
@@ -384,6 +417,5 @@ There is no public endpoint to create an OWNER account. The first owner is seede
 
 - Payment processing (handled in-person)
 - Multi-location support
-- Customer loyalty / points system
 - Barber portfolio / photo gallery
 - Reviews and ratings
