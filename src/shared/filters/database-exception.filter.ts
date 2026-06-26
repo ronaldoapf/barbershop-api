@@ -15,7 +15,13 @@ export class DatabaseExceptionFilter implements ExceptionFilter {
       P2025: HttpStatus.NOT_FOUND,
     };
 
+    const messageMap: Record<string, string> = {
+      P2002: 'Já existe um registro com esses dados.',
+      P2025: 'Registro não encontrado.',
+    };
+
     const status = statusMap[exception.code] ?? HttpStatus.INTERNAL_SERVER_ERROR;
+    const message = messageMap[exception.code] ?? 'Erro interno no servidor.';
 
     if (status === HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(exception);
@@ -23,7 +29,7 @@ export class DatabaseExceptionFilter implements ExceptionFilter {
 
     response.status(status).json({
       statusCode: status,
-      message: exception.message,
+      message,
     });
   }
 }

@@ -28,7 +28,7 @@ describe('DatabaseExceptionFilter', () => {
     filter.catch(exception, makeMockHost(status, json));
 
     expect(status).toHaveBeenCalledWith(409);
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 409 }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 409, message: 'Já existe um registro com esses dados.' }));
   });
 
   it('maps P2025 to 404', () => {
@@ -42,7 +42,7 @@ describe('DatabaseExceptionFilter', () => {
     filter.catch(exception, makeMockHost(status, json));
 
     expect(status).toHaveBeenCalledWith(404);
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404, message: 'Registro não encontrado.' }));
   });
 
   it('maps unknown Prisma codes to 500', () => {
@@ -56,5 +56,6 @@ describe('DatabaseExceptionFilter', () => {
     filter.catch(exception, makeMockHost(status, json));
 
     expect(status).toHaveBeenCalledWith(500);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 500, message: 'Erro interno no servidor.' }));
   });
 });
