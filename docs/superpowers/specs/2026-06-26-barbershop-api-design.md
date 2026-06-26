@@ -63,6 +63,14 @@ providerAccountId (unique ID from the provider),
 createdAt
 ```
 
+### `SessionEntity`
+Tracks active refresh tokens per user. Supports multiple concurrent sessions (e.g., web + mobile). On logout the row is deleted; on refresh the old row is deleted and a new one is created (rotation).
+```
+id, userId (FK → users), refreshTokenHash,
+userAgent (nullable), ipAddress (nullable),
+expiresAt, createdAt
+```
+
 ### `BarberEntity`
 Composition record created alongside the user when role = BARBER. Keeps barber-specific data out of the users table.
 ```
@@ -105,7 +113,8 @@ id, barberId (FK → barbers),
 type (WEEKLY | SPECIFIC_DATE),
 dayOfWeek (0–6, used when type = WEEKLY),
 date (used when type = SPECIFIC_DATE),
-startTime, endTime,
+startTime (nullable — null when isWorking = false),
+endTime (nullable — null when isWorking = false),
 isWorking (boolean — false = day off),
 createdAt, disabledAt
 ```
@@ -364,7 +373,14 @@ FRONTEND_URL=
 
 ---
 
-## 12. Out of Scope
+## 12. Notes
+
+### Owner Account Creation
+There is no public endpoint to create an OWNER account. The first owner is seeded via a Prisma seed script (`prisma/seed.ts`) during initial setup. Subsequent owner accounts (if ever needed) are created directly in the database or via a protected admin script — never through the public API.
+
+---
+
+## 13. Out of Scope
 
 - Payment processing (handled in-person)
 - Multi-location support
