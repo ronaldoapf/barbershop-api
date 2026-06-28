@@ -5,7 +5,7 @@ import { RefreshTokenUseCase } from './refresh-token.use-case';
 import { ISessionsRepository } from '../domain/sessions.repository.interface';
 import { IUsersRepository } from '../../users/domain/users.repository.interface';
 import { LoginUseCase } from './login.use-case';
-import * as bcrypt from 'bcryptjs';
+import { BcryptService } from '../../../shared/infrastructure/services/bcrypt.service';
 import { UserEntity } from '../../users/domain/user.entity';
 import { UserRole } from '../../users/domain/user-role.enum';
 
@@ -15,6 +15,7 @@ describe('RefreshTokenUseCase', () => {
   let usersRepo: jest.Mocked<IUsersRepository>;
   let jwtService: jest.Mocked<JwtService>;
   let loginUseCase: jest.Mocked<LoginUseCase>;
+  let bcryptService: jest.Mocked<BcryptService>;
 
   beforeEach(() => {
     sessionsRepo = { findById: jest.fn(), deleteById: jest.fn() } as unknown as jest.Mocked<ISessionsRepository>;
@@ -22,7 +23,8 @@ describe('RefreshTokenUseCase', () => {
     jwtService = { verify: jest.fn(), sign: jest.fn() } as unknown as jest.Mocked<JwtService>;
     loginUseCase = { issueTokens: jest.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r' }) } as unknown as jest.Mocked<LoginUseCase>;
     const configService = { get: jest.fn().mockReturnValue('refresh-secret') } as unknown as ConfigService;
-    useCase = new RefreshTokenUseCase(sessionsRepo, usersRepo, loginUseCase, jwtService, configService);
+    bcryptService = { encrypt: jest.fn(), compare: jest.fn() } as unknown as jest.Mocked<BcryptService>;
+    useCase = new RefreshTokenUseCase(sessionsRepo, usersRepo, loginUseCase, jwtService, configService, bcryptService);
   });
 
   it('throws UnauthorizedException when JWT is invalid', async () => {
@@ -41,7 +43,7 @@ describe('RefreshTokenUseCase', () => {
     sessionsRepo.findById.mockResolvedValue({
       id: 'session-1',
       userId: 'user-1',
-      refreshTokenHash: await bcrypt.hash('token', 1),
+      refreshTokenHash: 'hashed-token',
       expiresAt: new Date(Date.now() - 1000),
     });
     await expect(useCase.execute('token')).rejects.toThrow(UnauthorizedException);
@@ -53,9 +55,10 @@ describe('RefreshTokenUseCase', () => {
     sessionsRepo.findById.mockResolvedValue({
       id: 'session-1',
       userId: 'user-1',
-      refreshTokenHash: await bcrypt.hash(token, 1),
+      refreshTokenHash: 'hashed-token',
       expiresAt: new Date(Date.now() + 100000),
     });
+    bcryptService.compare.mockResolvedValue(true);
     usersRepo.findById.mockResolvedValue({ id: 'user-1', role: UserRole.CUSTOMER, disabledAt: null } as UserEntity);
 
     const result = await useCase.execute(token);

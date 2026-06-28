@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { CreateBarberUseCase } from './create-barber.use-case';
 import { IUsersRepository } from '../domain/users.repository.interface';
 import { IBarbersRepository } from '../domain/barbers.repository.interface';
+import { BcryptService } from '../../../shared/infrastructure/services/bcrypt.service';
 import { UserEntity } from '../domain/user.entity';
 import { BarberEntity } from '../domain/barber.entity';
 import { CreateBarberDto } from '../dto/create-barber.dto';
@@ -11,6 +12,7 @@ describe('CreateBarberUseCase', () => {
   let useCase: CreateBarberUseCase;
   let usersRepo: jest.Mocked<IUsersRepository>;
   let barbersRepo: jest.Mocked<IBarbersRepository>;
+  let bcryptService: jest.Mocked<BcryptService>;
 
   beforeEach(() => {
     usersRepo = {
@@ -20,7 +22,8 @@ describe('CreateBarberUseCase', () => {
     barbersRepo = {
       create: jest.fn(),
     } as unknown as jest.Mocked<IBarbersRepository>;
-    useCase = new CreateBarberUseCase(usersRepo, barbersRepo);
+    bcryptService = { encrypt: jest.fn().mockResolvedValue('hashed'), compare: jest.fn() } as unknown as jest.Mocked<BcryptService>;
+    useCase = new CreateBarberUseCase(usersRepo, barbersRepo, bcryptService);
   });
 
   it('throws ConflictException when email already exists', async () => {
@@ -86,8 +89,8 @@ describe('CreateBarberUseCase', () => {
 
     await useCase.execute(dto);
 
+    expect(bcryptService.encrypt).toHaveBeenCalledWith(dto.password);
     const createCall = usersRepo.create.mock.calls[0][0];
     expect(createCall.passwordHash).not.toBe(dto.password);
-    expect(createCall.passwordHash).toMatch(/^\$2[aby]\$/);
   });
 });
