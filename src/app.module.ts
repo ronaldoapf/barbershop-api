@@ -7,6 +7,7 @@ import { DatabaseExceptionFilter } from './shared/filters/database-exception.fil
 import { PrismaModule } from './shared/infrastructure/prisma.module';
 import { AuthModule } from './modules/auth/infrastructure/auth.module';
 import { UsersModule } from './modules/users/infrastructure/users.module';
+import { ServicesModule } from './modules/services/infrastructure/services.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { UsersModule } from './modules/users/infrastructure/users.module';
     PrismaModule,
     AuthModule,
     UsersModule,
+    ServicesModule,
   ],
   controllers: [AppController],
   providers: [
