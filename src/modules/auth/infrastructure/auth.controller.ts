@@ -58,6 +58,7 @@ export class AuthController {
   @Get('google')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Redirect to Google OAuth' })
+  @ApiResponse({ status: 302, description: 'Redirect to Google OAuth' })
   googleAuth(): void {}
 
   @Get('google/callback')

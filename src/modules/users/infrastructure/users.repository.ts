@@ -53,7 +53,7 @@ export class UsersRepository implements IUsersRepository {
     data: Partial<{ name: string; phone: string | null; avatarUrl: string | null; avatarStorageKey: string | null }>,
   ): Promise<UserEntity> {
     try {
-      const record = await this.prisma.user.update({ where: { id }, data });
+      const record = await this.prisma.user.update({ where: { id, disabledAt: null }, data });
       return this.toEntity(record);
     } catch {
       throw new NotFoundException('Usuário não encontrado');
@@ -62,7 +62,7 @@ export class UsersRepository implements IUsersRepository {
 
   async updateLoyaltyPoints(id: string, delta: number): Promise<void> {
     await this.prisma.user.update({
-      where: { id },
+      where: { id, disabledAt: null },
       data: { loyaltyPoints: { increment: delta } },
     });
   }
