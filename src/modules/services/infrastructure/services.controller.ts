@@ -6,6 +6,7 @@ import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { Roles } from '../../../shared/decorators/roles.decorator';
 import { UserRole } from '../../users/domain/user-role.enum';
 import { PaginationQueryDto } from '../../../shared/application/pagination-query.dto';
+import { ListServicesQueryDto } from '../dto/list-services-query.dto';
 import { CreateCategoryUseCase } from '../application/create-category.use-case';
 import { UpdateCategoryUseCase } from '../application/update-category.use-case';
 import { DeleteCategoryUseCase } from '../application/delete-category.use-case';
@@ -95,7 +96,7 @@ export class ServicesController {
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'List services' })
   @ApiResponse({ status: 200 })
-  async listServices(@Query() query: PaginationQueryDto & { categoryId?: string; status?: ItemStatus }) {
+  async listServices(@Query() query: ListServicesQueryDto) {
     const result = await this.listServicesUseCase.execute({ categoryId: query.categoryId, status: query.status, page: query.page, limit: query.limit });
     return { ...result, data: result.data.map(toServiceResponseDto) };
   }

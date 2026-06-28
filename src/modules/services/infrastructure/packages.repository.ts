@@ -21,7 +21,12 @@ export class PackagesRepository implements IPackagesRepository {
         ...rest,
         packageServices: { create: serviceIds.map((serviceId) => ({ serviceId })) },
       },
-      include: { packageServices: { include: { service: true } } },
+      include: {
+        packageServices: {
+          where: { service: { disabledAt: null } },
+          include: { service: true },
+        },
+      },
     });
     return this.toEntity(record);
   }
@@ -29,7 +34,12 @@ export class PackagesRepository implements IPackagesRepository {
   async findById(id: string): Promise<PackageEntity | null> {
     const r = await this.prisma.package.findFirst({
       where: { id, disabledAt: null },
-      include: { packageServices: { include: { service: true } } },
+      include: {
+        packageServices: {
+          where: { service: { disabledAt: null } },
+          include: { service: true },
+        },
+      },
     });
     return r ? this.toEntity(r) : null;
   }
@@ -38,7 +48,7 @@ export class PackagesRepository implements IPackagesRepository {
     const { skip, take } = PaginationHelper.getSkipTake(params.page, params.limit);
     const where = { disabledAt: null };
     const [records, total] = await this.prisma.$transaction([
-      this.prisma.package.findMany({ where, skip, take, orderBy: { order: 'asc' }, include: { packageServices: { include: { service: true } } } }),
+      this.prisma.package.findMany({ where, skip, take, orderBy: { order: 'asc' }, include: { packageServices: { where: { service: { disabledAt: null } }, include: { service: true } } } }),
       this.prisma.package.count({ where }),
     ]);
     return { data: records.map((r) => this.toEntity(r)), total, page: params.page, limit: params.limit };
@@ -54,13 +64,13 @@ export class PackagesRepository implements IPackagesRepository {
       if (serviceIds) {
         await tx.packageService.deleteMany({ where: { packageId: id } });
       }
-      return tx.package.update({ where: { id, disabledAt: null }, data: updateData, include: { packageServices: { include: { service: true } } } });
+      return tx.package.update({ where: { id, disabledAt: null }, data: updateData, include: { packageServices: { where: { service: { disabledAt: null } }, include: { service: true } } } });
     });
     return this.toEntity(record);
   }
 
   async updateStatus(id: string, status: ItemStatus): Promise<PackageEntity> {
-    const record = await this.prisma.package.update({ where: { id, disabledAt: null }, data: { status }, include: { packageServices: { include: { service: true } } } });
+    const record = await this.prisma.package.update({ where: { id, disabledAt: null }, data: { status }, include: { packageServices: { where: { service: { disabledAt: null } }, include: { service: true } } } });
     return this.toEntity(record);
   }
 
