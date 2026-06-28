@@ -15,6 +15,7 @@ import { UsersController } from './users.controller';
 import { IUsersRepository } from '../domain/users.repository.interface';
 import { IBarbersRepository } from '../domain/barbers.repository.interface';
 import { StorageService } from '../../../shared/infrastructure/services/storage.service';
+import { BcryptService } from '../../../shared/infrastructure/services/bcrypt.service';
 
 @Module({
   controllers: [UsersController],
@@ -22,6 +23,7 @@ import { StorageService } from '../../../shared/infrastructure/services/storage.
     { provide: IUsersRepository, useClass: UsersRepository },
     { provide: IBarbersRepository, useClass: BarbersRepository },
     StorageService,
+    BcryptService,
     GetMeUseCase,
     UpdateMeUseCase,
     ListUsersUseCase,
@@ -33,6 +35,6 @@ import { StorageService } from '../../../shared/infrastructure/services/storage.
     PresignAvatarUseCase,
     ConfirmAvatarUseCase,
   ],
-  exports: [IUsersRepository, IBarbersRepository, StorageService],
+  exports: [IUsersRepository, IBarbersRepository, StorageService, BcryptService],
 })
 export class UsersModule {}

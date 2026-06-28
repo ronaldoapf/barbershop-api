@@ -2,11 +2,11 @@ import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/c
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
-import * as bcrypt from 'bcryptjs';
 import { IUsersRepository } from '../../users/domain/users.repository.interface';
 import { UserRole } from '../../users/domain/user-role.enum';
 import { ISessionsRepository } from '../domain/sessions.repository.interface';
 import { LoginDto } from '../dto/login.dto';
+import { BcryptService } from '../../../shared/infrastructure/services/bcrypt.service';
 
 @Injectable()
 export class LoginUseCase {
@@ -15,6 +15,7 @@ export class LoginUseCase {
     private readonly sessionsRepository: ISessionsRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly bcryptService: BcryptService,
   ) {}
 
   async execute(
@@ -25,7 +26,7 @@ export class LoginUseCase {
     if (!user || !user.passwordHash) throw new UnauthorizedException('Credenciais inválidas');
     if (user.disabledAt) throw new ForbiddenException('Conta desativada');
 
-    const valid = await bcrypt.compare(dto.password, user.passwordHash);
+    const valid = await this.bcryptService.compare(dto.password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Credenciais inválidas');
 
     return this.issueTokens(user.id, user.role, meta);
@@ -42,7 +43,7 @@ export class LoginUseCase {
       { sub: userId, jti: sessionId },
       { secret: this.configService.get<string>('JWT_REFRESH_SECRET'), expiresIn: '7d' },
     );
-    const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+    const refreshTokenHash = await this.bcryptService.encrypt(refreshToken);
 
     await this.sessionsRepository.create({
       id: sessionId,

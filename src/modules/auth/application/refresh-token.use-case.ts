@@ -1,10 +1,10 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcryptjs';
 import { ISessionsRepository } from '../domain/sessions.repository.interface';
 import { IUsersRepository } from '../../users/domain/users.repository.interface';
 import { LoginUseCase } from './login.use-case';
+import { BcryptService } from '../../../shared/infrastructure/services/bcrypt.service';
 
 @Injectable()
 export class RefreshTokenUseCase {
@@ -14,6 +14,7 @@ export class RefreshTokenUseCase {
     private readonly loginUseCase: LoginUseCase,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly bcryptService: BcryptService,
   ) {}
 
   async execute(
@@ -37,7 +38,7 @@ export class RefreshTokenUseCase {
       throw new UnauthorizedException('Sessão expirada');
     }
 
-    const valid = await bcrypt.compare(refreshToken, session.refreshTokenHash);
+    const valid = await this.bcryptService.compare(refreshToken, session.refreshTokenHash);
     if (!valid) throw new UnauthorizedException('Token de atualização inválido');
 
     const user = await this.usersRepository.findById(payload.sub);
