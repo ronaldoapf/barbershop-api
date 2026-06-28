@@ -5,11 +5,15 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseExceptionFilter } from './shared/filters/database-exception.filter';
 import { PrismaModule } from './shared/infrastructure/prisma.module';
+import { AuthModule } from './modules/auth/infrastructure/auth.module';
+import { UsersModule } from './modules/users/infrastructure/users.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    AuthModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [
