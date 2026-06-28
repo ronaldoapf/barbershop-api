@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  CUSTOMER
+  BARBER
+  OWNER
+}
+
+enum OAuthProvider {
+  GOOGLE
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum ItemStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum WorkingHoursType {
+  WEEKLY
+  SPECIFIC_DATE
+}
+
+enum LoyaltyTransactionType {
+  EARN
+  REDEEM
+}
+
+model User {
+  id               String    @id @default(uuid())
+  name             String
+  email            String    @unique
+  phone            String?
+  passwordHash     String?
+  role             UserRole  @default(CUSTOMER)
+  loyaltyPoints    Int       @default(0)
+  avatarUrl        String?
+  avatarStorageKey String?
+  createdAt        DateTime  @default(now())
+  disabledAt       DateTime?
+
+  accounts             Account[]
+  sessions             Session[]
+  barber               Barber?
+  customerAppointments Appointment[]        @relation("CustomerAppointments")
+  loyaltyTransactions  LoyaltyTransaction[]
+}
+
+model Account {
+  id                String        @id @default(uuid())
+  userId            String
+  provider          OAuthProvider
+  providerAccountId String
+  createdAt         DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id               String   @id @default(uuid())
+  userId           String
+  refreshTokenHash String
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Barber {
+  id                   String    @id @default(uuid())
+  userId               String    @unique
+  commissionPercentage Decimal   @db.Decimal(5, 2)
+  createdAt            DateTime  @default(now())
+  disabledAt           DateTime?
+
+  user         User                 @relation(fields: [userId], references: [id])
+  workingHours BarberWorkingHours[]
+  appointments Appointment[]        @relation("BarberAppointments")
+}
+
+model Category {
+  id         String    @id @default(uuid())
+  name       String
+  order      Int
+  createdAt  DateTime  @default(now())
+  disabledAt DateTime?
+
+  services Service[]
+}
+
+model Service {
+  id              String     @id @default(uuid())
+  categoryId      String?
+  name            String
+  description     String?
+  price           Int
+  durationMinutes Int
+  status          ItemStatus @default(ACTIVE)
+  order           Int
+  pointsEarned    Int        @default(0)
+  pointsRequired  Int        @default(0)
+  createdAt       DateTime   @default(now())
+  disabledAt      DateTime?
+
+  category            Category?            @relation(fields: [categoryId], references: [id])
+  packageServices     PackageService[]
+  appointmentServices AppointmentService[]
+}
+
+model Package {
+  id             String     @id @default(uuid())
+  name           String
+  description    String?
+  price          Int
+  status         ItemStatus @default(ACTIVE)
+  order          Int
+  pointsEarned   Int        @default(0)
+  pointsRequired Int        @default(0)
+  createdAt      DateTime   @default(now())
+  disabledAt     DateTime?
+
+  packageServices PackageService[]
+  appointments    Appointment[]
+}
+
+model PackageService {
+  id        String @id @default(uuid())
+  packageId String
+  serviceId String
+
+  package Package @relation(fields: [packageId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([packageId, serviceId])
+}
+
+model BarberWorkingHours {
+  id         String           @id @default(uuid())
+  barberId   String
+  type       WorkingHoursType
+  dayOfWeek  Int?
+  date       DateTime?        @db.Date
+  startTime  String?
+  endTime    String?
+  isWorking  Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  disabledAt DateTime?
+
+  barber Barber @relation(fields: [barberId], references: [id])
+}
+
+model Appointment {
+  id                 String            @id @default(uuid())
+  customerId         String
+  barberId           String
+  packageId          String?
+  startsAt           DateTime
+  endsAt             DateTime?
+  totalAmount        Int
+  status             AppointmentStatus @default(PENDING)
+  cancellationReason String?
+  cancelledBy        String?
+  cancelledAt        DateTime?
+  createdAt          DateTime          @default(now())
+  disabledAt         DateTime?
+
+  customer            User                 @relation("CustomerAppointments", fields: [customerId], references: [id])
+  barber              Barber               @relation("BarberAppointments", fields: [barberId], references: [id])
+  package             Package?             @relation(fields: [packageId], references: [id])
+  appointmentServices AppointmentService[]
+  loyaltyTransactions LoyaltyTransaction[]
+}
+
+model AppointmentService {
+  id                 String   @id @default(uuid())
+  appointmentId      String
+  serviceId          String
+  serviceName        String
+  price              Int
+  durationMinutes    Int
+  pointsEarned       Int      @default(0)
+  redeemedWithPoints Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  service     Service     @relation(fields: [serviceId], references: [id])
+}
+
+model LoyaltyTransaction {
+  id            String                 @id @default(uuid())
+  customerId    String
+  appointmentId String?
+  type          LoyaltyTransactionType
+  points        Int
+  description   String
+  createdAt     DateTime               @default(now())
+
+  customer    User         @relation(fields: [customerId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+}
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
