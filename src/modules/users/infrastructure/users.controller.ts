@@ -19,6 +19,7 @@ import { UpdateMeDto } from '../dto/update-me.dto';
 import { CreateBarberDto } from '../dto/create-barber.dto';
 import { UpdateBarberDto } from '../dto/update-barber.dto';
 import { ConfirmAvatarDto } from '../dto/confirm-avatar.dto';
+import { PresignAvatarDto } from '../dto/presign-avatar.dto';
 import { UserResponseDto, toUserResponseDto } from '../dto/user-response.dto';
 import { BarberResponseDto, toBarberResponseDto } from '../dto/barber-response.dto';
 import { PresignAvatarResponseDto } from '../dto/presign-avatar-response.dto';
@@ -62,9 +63,9 @@ export class UsersController {
   @ApiResponse({ status: 201, type: PresignAvatarResponseDto })
   async presignAvatar(
     @CurrentUser() user: { id: string },
-    @Body('mimeType') mimeType: string,
+    @Body() dto: PresignAvatarDto,
   ): Promise<PresignAvatarResponseDto> {
-    return this.presignAvatarUseCase.execute(user.id, mimeType);
+    return this.presignAvatarUseCase.execute(user.id, dto.mimeType);
   }
 
   @Patch('me/avatar/confirm')

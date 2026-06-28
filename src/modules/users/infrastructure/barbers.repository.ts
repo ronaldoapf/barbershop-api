@@ -50,7 +50,7 @@ export class BarbersRepository implements IBarbersRepository {
 
   async update(id: string, data: Partial<{ commissionPercentage: number }>): Promise<BarberEntity> {
     const record = await this.prisma.barber.update({
-      where: { id },
+      where: { id, disabledAt: null },
       data,
       include: { user: true },
     });

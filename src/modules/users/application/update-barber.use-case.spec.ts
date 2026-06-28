@@ -71,7 +71,7 @@ describe('UpdateBarberUseCase', () => {
 
   it('refetches barber when only user fields are updated', async () => {
     const barber = { id: 'barber-1', userId: 'user-1', commissionPercentage: 10 } as BarberEntity;
-    const updatedBarber = { id: 'barber-1', userId: 'user-1', name: 'New Name' } as BarberEntity;
+    const updatedBarber = { id: 'barber-1', userId: 'user-1', name: 'New Name' } as unknown as BarberEntity;
     const dto: UpdateBarberDto = { name: 'New Name' };
 
     barbersRepo.findById.mockResolvedValueOnce(barber);

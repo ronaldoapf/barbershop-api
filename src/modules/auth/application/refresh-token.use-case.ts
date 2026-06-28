@@ -40,10 +40,10 @@ export class RefreshTokenUseCase {
     const valid = await bcrypt.compare(refreshToken, session.refreshTokenHash);
     if (!valid) throw new UnauthorizedException('Token de atualização inválido');
 
-    await this.sessionsRepository.deleteById(payload.jti);
-
     const user = await this.usersRepository.findById(payload.sub);
     if (!user || user.disabledAt) throw new UnauthorizedException('Usuário não encontrado');
+
+    await this.sessionsRepository.deleteById(payload.jti);
 
     return this.loginUseCase.issueTokens(user.id, user.role, meta);
   }
