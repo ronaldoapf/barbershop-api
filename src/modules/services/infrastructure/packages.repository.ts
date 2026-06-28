@@ -48,20 +48,24 @@ export class PackagesRepository implements IPackagesRepository {
     const { serviceIds, ...rest } = data;
     const updateData: Record<string, unknown> = { ...rest };
     if (serviceIds) {
-      await this.prisma.packageService.deleteMany({ where: { packageId: id } });
       updateData.packageServices = { create: serviceIds.map((serviceId) => ({ serviceId })) };
     }
-    const record = await this.prisma.package.update({ where: { id }, data: updateData, include: { packageServices: { include: { service: true } } } });
+    const record = await this.prisma.$transaction(async (tx) => {
+      if (serviceIds) {
+        await tx.packageService.deleteMany({ where: { packageId: id } });
+      }
+      return tx.package.update({ where: { id }, data: updateData, include: { packageServices: { include: { service: true } } } });
+    });
     return this.toEntity(record);
   }
 
   async updateStatus(id: string, status: ItemStatus): Promise<PackageEntity> {
-    const record = await this.prisma.package.update({ where: { id }, data: { status }, include: { packageServices: { include: { service: true } } } });
+    const record = await this.prisma.package.update({ where: { id, disabledAt: null }, data: { status }, include: { packageServices: { include: { service: true } } } });
     return this.toEntity(record);
   }
 
   async softDelete(id: string): Promise<void> {
-    await this.prisma.package.update({ where: { id }, data: { disabledAt: new Date() } });
+    await this.prisma.package.update({ where: { id, disabledAt: null }, data: { disabledAt: new Date() } });
   }
 
   private toEntity(r: PackageWithServices): PackageEntity {

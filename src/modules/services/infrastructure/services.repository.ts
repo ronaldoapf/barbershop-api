@@ -34,15 +34,15 @@ export class ServicesRepository implements IServicesRepository {
   }
 
   async update(id: string, data: Partial<Omit<ServiceEntity, 'id' | 'createdAt' | 'disabledAt'>>): Promise<ServiceEntity> {
-    return this.toEntity(await this.prisma.service.update({ where: { id }, data }));
+    return this.toEntity(await this.prisma.service.update({ where: { id, disabledAt: null }, data }));
   }
 
   async updateStatus(id: string, status: ItemStatus): Promise<ServiceEntity> {
-    return this.toEntity(await this.prisma.service.update({ where: { id }, data: { status } }));
+    return this.toEntity(await this.prisma.service.update({ where: { id, disabledAt: null }, data: { status } }));
   }
 
   async softDelete(id: string): Promise<void> {
-    await this.prisma.service.update({ where: { id }, data: { disabledAt: new Date() } });
+    await this.prisma.service.update({ where: { id, disabledAt: null }, data: { disabledAt: new Date() } });
   }
 
   private toEntity(r: Service): ServiceEntity {

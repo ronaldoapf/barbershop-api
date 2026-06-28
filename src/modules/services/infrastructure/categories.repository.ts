@@ -23,11 +23,11 @@ export class CategoriesRepository implements ICategoriesRepository {
   }
 
   async update(id: string, data: Partial<{ name: string; order: number }>): Promise<CategoryEntity> {
-    return this.toEntity(await this.prisma.category.update({ where: { id }, data }));
+    return this.toEntity(await this.prisma.category.update({ where: { id, disabledAt: null }, data }));
   }
 
   async softDelete(id: string): Promise<void> {
-    await this.prisma.category.update({ where: { id }, data: { disabledAt: new Date() } });
+    await this.prisma.category.update({ where: { id, disabledAt: null }, data: { disabledAt: new Date() } });
   }
 
   private toEntity(r: Category): CategoryEntity {
