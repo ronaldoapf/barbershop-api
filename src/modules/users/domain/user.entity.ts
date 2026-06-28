@@ -5,6 +5,7 @@ export class UserEntity {
   name: string;
   email: string;
   phone: string | null;
+  passwordHash: string | null;
   role: UserRole;
   loyaltyPoints: number;
   avatarUrl: string | null;
