@@ -54,7 +54,7 @@ export class PackagesRepository implements IPackagesRepository {
       if (serviceIds) {
         await tx.packageService.deleteMany({ where: { packageId: id } });
       }
-      return tx.package.update({ where: { id }, data: updateData, include: { packageServices: { include: { service: true } } } });
+      return tx.package.update({ where: { id, disabledAt: null }, data: updateData, include: { packageServices: { include: { service: true } } } });
     });
     return this.toEntity(record);
   }
