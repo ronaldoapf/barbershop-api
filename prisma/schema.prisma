@@ -1,12 +1,221 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserRole {
+  CUSTOMER
+  BARBER
+  OWNER
+}
+
+enum OAuthProvider {
+  GOOGLE
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum AppointmentSource {
+  PLATFORM
+  WHATSAPP
+}
+
+enum ItemStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum WorkingHoursType {
+  WEEKLY
+  SPECIFIC_DATE
+}
+
+enum LoyaltyTransactionType {
+  EARN
+  REDEEM
+}
+
+model User {
+  id               String    @id @default(uuid())
+  name             String
+  email            String    @unique
+  phone            String?
+  passwordHash     String?   @map("password_hash")
+  role             UserRole  @default(CUSTOMER)
+  loyaltyPoints    Int       @default(0) @map("loyalty_points")
+  avatarUrl        String?   @map("avatar_url")
+  avatarStorageKey String?   @map("avatar_storage_key")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  disabledAt       DateTime? @map("disabled_at")
+
+  accounts             Account[]
+  sessions             Session[]
+  barber               Barber?
+  barberInvite         BarberInvite?
+  customerAppointments Appointment[]        @relation("CustomerAppointments")
+  loyaltyTransactions  LoyaltyTransaction[]
+
+  @@map("users")
+}
+
+model BarberInvite {
+  id         String    @id @default(uuid())
+  userId     String    @unique @map("user_id")
+  tokenHash  String    @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  acceptedAt DateTime? @map("accepted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("barber_invites")
+}
+
+model Account {
+  id                String        @id @default(uuid())
+  userId            String        @map("user_id")
+  provider          OAuthProvider
+  providerAccountId String        @map("provider_account_id")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  refreshTokenHash String   @map("refresh_token_hash")
+  userAgent        String?  @map("user_agent")
+  ipAddress        String?  @map("ip_address")
+  expiresAt        DateTime @map("expires_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("sessions")
+}
+
+model Barber {
+  id                   String    @id @default(uuid())
+  userId               String    @unique @map("user_id")
+  commissionPercentage Decimal   @map("commission_percentage") @db.Decimal(5, 2)
+  createdAt            DateTime  @default(now()) @map("created_at")
+  disabledAt           DateTime? @map("disabled_at")
+
+  user         User                 @relation(fields: [userId], references: [id])
+  workingHours BarberWorkingHours[]
+  appointments Appointment[]        @relation("BarberAppointments")
+
+  @@map("barbers")
+}
+
+model Service {
+  id              String     @id @default(uuid())
+  name            String
+  description     String?
+  price           Int
+  durationMinutes Int        @map("duration_minutes")
+  status          ItemStatus @default(ACTIVE)
+  order           Int
+  pointsEarned    Int        @default(0) @map("points_earned")
+  pointsRequired  Int        @default(0) @map("points_required")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  disabledAt      DateTime?  @map("disabled_at")
+
+  appointmentServices AppointmentService[]
+
+  @@map("services")
+}
+
+model BarberWorkingHours {
+  id         String           @id @default(uuid())
+  barberId   String           @map("barber_id")
+  type       WorkingHoursType
+  dayOfWeek  Int?             @map("day_of_week")
+  date       DateTime?        @db.Date
+  startTime  String?          @map("start_time")
+  endTime    String?          @map("end_time")
+  isWorking  Boolean          @default(true) @map("is_working")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  disabledAt DateTime?        @map("disabled_at")
+
+  barber Barber @relation(fields: [barberId], references: [id])
+
+  @@map("barber_working_hours")
+}
+
+model Appointment {
+  id                 String            @id @default(uuid())
+  customerId         String            @map("customer_id")
+  barberId           String            @map("barber_id")
+  startsAt           DateTime          @map("starts_at")
+  endsAt             DateTime?         @map("ends_at")
+  totalAmount        Int               @map("total_amount")
+  status             AppointmentStatus @default(PENDING)
+  source             AppointmentSource @default(PLATFORM)
+  cancellationReason String?           @map("cancellation_reason")
+  cancelledBy        String?           @map("cancelled_by")
+  cancelledAt        DateTime?         @map("cancelled_at")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  disabledAt         DateTime?         @map("disabled_at")
+
+  customer            User                 @relation("CustomerAppointments", fields: [customerId], references: [id])
+  barber              Barber               @relation("BarberAppointments", fields: [barberId], references: [id])
+  appointmentServices AppointmentService[]
+  loyaltyTransactions LoyaltyTransaction[]
+
+  @@map("appointments")
+}
+
+model AppointmentService {
+  id                 String   @id @default(uuid())
+  appointmentId      String   @map("appointment_id")
+  serviceId          String   @map("service_id")
+  serviceName        String   @map("service_name")
+  price              Int
+  durationMinutes    Int      @map("duration_minutes")
+  pointsEarned       Int      @default(0) @map("points_earned")
+  redeemedWithPoints Boolean  @default(false) @map("redeemed_with_points")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  service     Service     @relation(fields: [serviceId], references: [id])
+
+  @@map("appointment_services")
+}
+
+model LoyaltyTransaction {
+  id            String                 @id @default(uuid())
+  customerId    String                 @map("customer_id")
+  appointmentId String?                @map("appointment_id")
+  type          LoyaltyTransactionType
+  points        Int
+  description   String
+  createdAt     DateTime               @default(now()) @map("created_at")
+
+  customer    User         @relation(fields: [customerId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@map("loyalty_transactions")
+}
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
 }
