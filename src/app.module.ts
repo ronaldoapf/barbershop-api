@@ -7,6 +7,8 @@ import { ConfigModule } from '@nestjs/config';
 import { HealthController } from './shared/infrastructure/health.controller';
 import { UsersModule } from './modules/users/infrastructure/users.module';
 import { AuthModule } from './modules/auth/infrastructure/auth.module';
+import { SettingsModule } from './modules/settings/infrastructure/settings.module';
+import { BarbersModule } from './modules/barbers/infrastructure/barbers.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { AuthModule } from './modules/auth/infrastructure/auth.module';
     BcryptModule,
     UsersModule,
     AuthModule,
+    SettingsModule,
+    BarbersModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: DatabaseExceptionFilter }],

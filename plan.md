@@ -4,13 +4,15 @@
 
 The repo is a NestJS scaffold: the Prisma schema is already fully modeled and migrated to match `spec-en.md` §3 (11 models, 7 enums, migration `20260816041157_init_barbershop_database` applied), and a handful of shared building blocks exist (`PrismaService`/`PrismaModule`, `DatabaseExceptionFilter`, `PaginationHelper`, `BcryptService`). But **zero feature modules exist** — `src/modules/` doesn't exist yet, and two files that will anchor the whole auth system (`src/shared/decorators/current-user.decorator.ts`, `roles.decorator.ts`) already import from a `users` module that hasn't been built, so the project doesn't currently compile cleanly end-to-end.
 
-This plan sequences the build of every feature module described in `spec-en.md`, in an order that respects real dependencies (auth needs users, appointments need barbers+services+working-hours, loyalty needs appointments), introduces cross-cutting infra (email, queue, storage, events) exactly where the spec first needs them, and calls out the concurrency-sensitive rules (double-booking prevention, atomic loyalty updates) at the point they must be implemented correctly.
+This plan sequences the build of every feature module described in `spec-en.md`, in an order that respects real dependencies (auth needs users, appointments need barbers+services+working-hours, loyalty needs appointments), introduces cross-cutting infra (email, storage, events) exactly where the spec first needs them, and calls out the concurrency-sensitive rules (double-booking prevention, atomic loyalty updates) at the point they must be implemented correctly.
 
-Four decisions were resolved with the user before finalizing this plan:
+Six decisions were resolved with the user before finalizing this plan:
 1. **Commission tracking**: not a read-time computation (rejected — `Barber.commissionPercentage` changes over time, so recomputing from the current rate would silently rewrite historical reports). Instead, add two **snapshot fields to the existing `AppointmentService` model** at appointment-completion time: `commissionPercentageApplied` (Decimal 5,2) and `commissionAmount` (Int, cents). This is a schema change (new migration + CHANGELOG entry) but reuses the existing snapshot pattern already used for `serviceName`/`price`/`durationMinutes` — no new table. It also resolves spec §4.3/§6's open question implicitly: a points-redeemed service just gets `commissionAmount = 0` (explicit, not inferred from a separate flag) if `Setting['commission_on_redeemed_service']` is false, or the full computed amount if true.
 2. **Loyalty atomicity**: `complete-appointment.use-case.ts` injects `ILoyaltyRepository` directly and performs the status change + loyalty ledger write inside one `$transaction`, guaranteeing the atomicity spec §4.6 requires. `EventEmitter2` (`appointment.completed`) is still emitted afterward, but only for non-critical side effects (notifications, cache invalidation) — never for anything that must be atomic with completion.
-3. **Barber-invite pending state**: `User.disabledAt` stays exclusively a soft-delete field. A barber created via invite is an active `User` row from the start (no `passwordHash`, can't log in); "pending" is inferred purely from `BarberInvite.acceptedAt IS NULL`.
+3. **Barber-invite pending state**: `User.disabledAt` stays exclusively a soft-delete field. A barber created via invite (where no existing account matched the email) is an active `User` row from the start (no `passwordHash`, can't log in); "pending" is inferred purely from `BarberInvite.acceptedAt IS NULL`.
 4. **WhatsApp integration scope**: this repo only exposes `ServiceApiKeyGuard`-protected routes on the existing `appointments`/`users` controllers, reusing the same use cases platform bookings use. No chatbot, NLP, or WhatsApp-client code belongs in this repo — that's a separate external service.
+5. **Existing-user barber promotion**: `Barber` is a hard 1:1 extension of `User` (single `role` field, no multi-role) — there's no such thing as a "barber with no user." So `send-invite.use-case.ts` first looks up the invited email via `IUsersRepository.findByEmail`. Not found → behaves as decision #3 describes (new `User`, `role: BARBER`, no password). Found with `role: CUSTOMER` → reuses that `userId` for the `BarberInvite` and leaves `role` untouched until acceptance (so an unaccepted invite doesn't silently reclassify an active customer). Found with `role: BARBER` or `OWNER` → `ConflictException`. `accept-invite.use-case.ts` always sets `role: BARBER` on acceptance regardless of path, and only runs the "set password" step when the user doesn't already have a `passwordHash` — an existing customer keeps their current password.
+6. **No queue infra yet**: `send-invite.use-case.ts`/`resend-invite.use-case.ts` call `MailService` directly and `await` the send inline in the request cycle — no `QueueService`/BullMQ. The `bullmq`/`ioredis`/`@nestjs/bullmq` packages are dropped from the Phase 0 install list; queue infrastructure is deferred until a phase actually needs true background/deferred work (none currently does — an invite email is a single Resend API call, acceptable to await inline).
 
 ---
 
@@ -22,7 +24,6 @@ Get the project to a clean, compilable, testable baseline before any feature mod
   - Auth: `@nestjs/passport passport passport-jwt passport-google-oauth20 @nestjs/jwt` (+ `@types/passport-jwt @types/passport-google-oauth20` as dev deps)
   - Storage: `@aws-sdk/client-s3 @aws-sdk/s3-request-presigner`
   - Email: `resend`
-  - Queue: `bullmq ioredis @nestjs/bullmq`
   - Events: `@nestjs/event-emitter`
 - Create `.env.example` mirroring `.env`'s keys with placeholder values (architecture.md §13 requires this; it doesn't exist). Add `BCRYPT_SALT_ROUNDS` (already read by `bcrypt.service.ts`). Drop `SMS_PROVIDER_API_KEY` unless the user says otherwise — it has no home in `spec-en.md` or `architecture.md`.
 - Add a `## CHANGELOG` section to `architecture.md` (§14 mandates it; missing today). Seed it with the initial migration, then immediately append the Phase 8 `AppointmentService` commission-fields migration once that lands.
@@ -69,16 +70,18 @@ Unblocks the two broken decorator imports: `src/shared/decorators/current-user.d
 
 ---
 
-## Phase 4 — `barber-invites` module (email + queue introduced)
+## Phase 4 — `barber-invites` module (email introduced)
 
-- **`src/shared/mail/`**: `mail.service.ts` + `resend-mail.service.ts` (uses `RESEND_API_KEY`/`RESEND_FROM_EMAIL`).
-- **`src/shared/infrastructure/services/queue.service.ts`**: BullMQ wrapper (`REDIS_URL`); first job is the invite email send.
+- **`src/shared/mail/`**: `mail.service.ts` (abstract `IMailService`, DI token) + `resend-mail.service.ts` (uses `RESEND_API_KEY`/`RESEND_FROM_EMAIL`). Injected directly into use cases — no queue indirection (decision #6); this mirrors how `BcryptService` is already injected straight into `application/` use cases elsewhere.
 - **domain/**: `barber-invite.entity.ts`, `barber-invites.repository.interface.ts` (`create`, `findByUserId`, `findByTokenHash`, `markAccepted`).
-- **application/**: `send-invite.use-case.ts` (OWNER-only: creates an *active* `User` with `role: BARBER`, no `passwordHash` — per the resolved pending-state decision; generates a plaintext token, persists only `tokenHash`; `expiresAt` = now + `Setting['barber_invite_expiry_days']` default 7; enqueues invite email job), `validate-invite-token.use-case.ts` (public), `accept-invite.use-case.ts` (verifies token hash + not expired + `acceptedAt IS NULL`, sets password via `BcryptService`, creates `Barber` row with `commissionPercentage` = `Setting['default_commission_percentage']`, sets `acceptedAt`), `resend-invite.use-case.ts` (OWNER-only: regenerates tokenHash + expiresAt, re-enqueues email).
-- Queue *processor* (`send-invite-email.processor.ts`) lives in `infrastructure/` (per architecture.md §9), not `application/`; the use case only calls `queueService.add(...)`.
-- **dto/**: `send-invite.dto.ts`, `accept-invite.dto.ts`.
+- **application/**:
+  - `send-invite.use-case.ts` (OWNER-only). Looks up the invited email via `IUsersRepository.findByEmail` first (decision #5): not found → creates a new *active* `User` with `role: BARBER`, no `passwordHash` (decision #3); found with `role: CUSTOMER` → reuses that `userId` for the invite without touching `role` yet; found with `role: BARBER`/`OWNER` → throws `ConflictException`. Generates a plaintext token, persists only `tokenHash`; `expiresAt` = now + `Setting['barber_invite_expiry_days']` default 7; sends the invite email by calling `MailService` directly, awaited in the request cycle.
+  - `validate-invite-token.use-case.ts` (public).
+  - `accept-invite.use-case.ts` (verifies token hash + not expired + `acceptedAt IS NULL`; sets `role: BARBER` unconditionally — covers both the brand-new-user and promoted-existing-customer paths; sets a password via `BcryptService` only if the user doesn't already have one, decision #5; creates `Barber` row with `commissionPercentage` = `Setting['default_commission_percentage']`; sets `acceptedAt`).
+  - `resend-invite.use-case.ts` (OWNER-only: regenerates `tokenHash` + `expiresAt`, resends the email directly via `MailService`).
+- **dto/**: `send-invite.dto.ts` (`name`, `email` — `name` is only used when no existing user is found), `accept-invite.dto.ts` (`password` optional — omitted by the client when the invited user already has one; the use case ignores it if present but unneeded).
 - **infrastructure/**: `barber-invites.repository.ts`, `barber-invites.controller.ts` (exact routes from spec §5: `POST /invites`, `GET /invites/:token`, `POST /invites/:token/accept`, `POST /invites/:id/resend`), `barber-invites.module.ts`.
-- Good phase for an e2e spanning users+auth+barbers+invites (full invite→accept→login lifecycle).
+- Good phase for an e2e spanning users+auth+barbers+invites (full invite→accept→login lifecycle for a brand-new barber), plus a second e2e covering the existing-customer promotion path (register as `CUSTOMER` → OWNER invites the same email → accept without a password → `role` is now `BARBER` and the original password still logs in).
 
 ---
 
@@ -157,7 +160,6 @@ Per decision #4: no dedicated `whatsapp-integration` module.
 |---|---|---|
 | `JwtAuthGuard`/`RolesGuard` | 2 | `src/shared/guards/` |
 | Resend / `MailService` | 4 | `src/shared/mail/` |
-| BullMQ / `QueueService` | 4 | `src/shared/infrastructure/services/queue.service.ts` |
 | S3/R2 `StorageService` | 7 | `src/shared/infrastructure/services/` |
 | `AppointmentOwnershipGuard` / `ServiceApiKeyGuard` | 8 | `src/shared/guards/` |
 | `$transaction` conflict-check | 8 | `appointments.repository.ts` |

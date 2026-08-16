@@ -11,8 +11,12 @@ This is a **NestJS starter scaffold** — `src/` currently only contains the def
 
 ## Commands
 
+Node version is pinned to **24.14** via `.nvmrc`. Run `nvm use` (or `nvm use 24.14`) before any `npm`/`node`/`npx` command below — every shell must do this, not just the first one, since a fresh shell defaults to whatever `nvm`'s default alias is, not this project's version.
+
 ```bash
-npm install            # install deps (npm only — never pnpm/yarn)
+nvm use                # switch this shell to the pinned Node version (24.14)
+
+npm install             # install deps (npm only — never pnpm/yarn)
 
 npm run start:dev      # dev server, watch mode
 npm run start          # dev server, no watch
@@ -40,7 +44,7 @@ Prisma config lives in `prisma.config.ts` (schema at `prisma/schema.prisma`, mig
 
 ## Architecture (mandatory, from `architecture.md`)
 
-Stack: NestJS 11, TypeScript 5, PostgreSQL via Prisma 7 (driver adapter `@prisma/adapter-pg`), Passport (JWT + Google OAuth), S3/R2 file storage via presigned URLs, Resend for email, Swagger for HTTP docs, BullMQ-backed `QueueService` for async jobs, `EventEmitter2` for cross-module events.
+Stack: Node.js 24.14 (via nvm — see Commands above), NestJS 11, TypeScript 5, PostgreSQL via Prisma 7 (driver adapter `@prisma/adapter-pg`), Passport (JWT + Google OAuth), S3/R2 file storage via presigned URLs, Resend for email, Swagger for HTTP docs, BullMQ-backed `QueueService` for async jobs, `EventEmitter2` for cross-module events.
 
 ### Four-layer module structure
 
@@ -66,7 +70,7 @@ Shared cross-cutting code lives in `src/shared/` (`decorators/`, `guards/`, `fil
 - **Controllers/Swagger**: every controller class needs `@ApiTags`, every method needs `@ApiOperation` and `@ApiResponse` for the primary success case, protected endpoints need `@ApiBearerAuth()`.
 - **Guards**: `JwtAuthGuard`/`OptionalJwtAuthGuard` for auth, `RolesGuard`+`@Roles()` for platform-level role checks, `CabinetRolesGuard`+`@CabinetRoles()` for per-resource role checks, plus resource-ownership guards (`UserAccessGuard`, `DemandAccessGuard`, `ResultAccessGuard`). Get the authenticated user via `@CurrentUser()`.
 - **Events**: use `EventEmitter2`/`@OnEvent` for cross-module side effects instead of direct cross-module imports, to avoid circular dependencies. Listeners live in `application/` and follow the same import constraints as use cases.
-- **Async work**: anything long-running/deferred goes through `QueueService.add(...)` (BullMQ) rather than running synchronously in the request cycle. Queue processors live in `infrastructure/` and may use `PrismaService` directly.
+- **Async work**: anything long-running/deferred goes through `QueueService.add(...)` (BullMQ) rather than running synchronously in the request cycle — but this isn't wired up yet (no `bullmq`/`ioredis` dependency installed); nothing built so far needs true background work, so don't add it speculatively. Invite emails, for instance, call `MailService` directly and await it inline (`plan.md` decision #6). Queue processors, whenever a phase actually needs them, live in `infrastructure/` and may use `PrismaService` directly.
 - **File storage**: always persist `storageKey` + `url` + `mimeType` + `size` together; validate uploaded file type by magic bytes, not the MIME header. Flow is presigned URL → client uploads directly to S3 → client confirms → use case persists metadata.
 - **Pagination**: list endpoints return `{ data, total, page, limit }`; derive `skip`/`take` via `PaginationHelper.getSkipTake(params)` in the repository, and accept params via `PaginationQueryDto`.
 - **Config**: always go through `ConfigService` (`@nestjs/config`) — never read `process.env` directly inside modules.

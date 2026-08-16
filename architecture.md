@@ -8,6 +8,7 @@ This repository is a **NestJS** API following strict **Clean Architecture** with
 
 | Layer | Technology |
 |---|---|
+| Runtime | Node.js 24.14 (via nvm) |
 | Framework | NestJS 11 |
 | Language | TypeScript 5 |
 | Database | PostgreSQL 15 (Docker) |
@@ -22,10 +23,12 @@ This repository is a **NestJS** API following strict **Clean Architecture** with
 
 ## Runtime & Package Manager
 
+- **Node version: 24.14, managed via nvm.** Every shell that runs `npm`/`node`/`npx` for this project (install, dev server, tests, migrations, scripts) must run `nvm use 24.14` first — do not rely on whatever `node` a fresh shell defaults to. A `.nvmrc` pinning `24.14` is checked in so plain `nvm use` (no version arg) also works.
 - **Package manager: npm.** Never use `pnpm` or `yarn`. All install, add, and script commands must go through `npm`.
 
 ```bash
 # correct
+nvm use 24.14
 npm install
 npm add zod
 npm start:dev
@@ -332,6 +335,8 @@ Register listeners in the module's `providers` array. Listeners must follow the 
 ---
 
 ## 9. Async Jobs — BullMQ
+
+**Not currently wired up.** No `QueueService`/BullMQ dependency is installed in this project yet — invite emails and other current work are sent synchronously via `MailService` (see `plan.md` decision #6). This section documents the pattern to follow *if and when* a phase introduces genuine long-running/deferred work; don't add BullMQ speculatively before that need exists.
 
 Long-running or deferred work (e.g., linking guest demands after registration) goes through `QueueService`. Never perform these operations synchronously in the request cycle.
 
