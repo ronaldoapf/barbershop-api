@@ -7,7 +7,8 @@ export class BcryptService {
   private readonly saltRounds: number;
 
   constructor(configService: ConfigService) {
-    this.saltRounds = configService.get<number>('BCRYPT_SALT_ROUNDS') ?? 10;
+    const configured = configService.get<string>('BCRYPT_SALT_ROUNDS');
+    this.saltRounds = configured ? Number(configured) : 10;
   }
 
   async encrypt(plainText: string): Promise<string> {

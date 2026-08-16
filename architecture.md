@@ -456,3 +456,11 @@ Never modify an existing migration file. Always create a new migration.
 | Pure utility functions | `src/shared/utils/` |
 
 ---
+
+## CHANGELOG
+
+Every Prisma schema change or core business-logic decision is logged here: date, what changed, and why.
+
+### 2026-08-16 — Initial schema
+
+Migration `20260816041157_init_barbershop_database` applied. Models: `User`, `BarberInvite`, `Account`, `Session`, `Barber`, `Service`, `BarberWorkingHours`, `Appointment`, `AppointmentService`, `LoyaltyTransaction`, `Setting`. Establishes the baseline schema described in `spec-en.md` §3.
