@@ -1,9 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { Barber, Prisma, User } from '@prisma/client';
 import { PrismaService } from '../../../shared/infrastructure/prisma.service';
 import { PaginationHelper } from '../../../shared/application/pagination.helper';
 import { PaginatedResult } from '../../../shared/domain/pagination.interface';
-import { IBarbersRepository } from '../domain/barbers.repository.interface';
+import {
+  CreateBarberData,
+  IBarbersRepository,
+} from '../domain/barbers.repository.interface';
 import { BarberEntity } from '../domain/barber.entity';
 
 type BarberWithUser = Barber & { user: User };
@@ -13,6 +16,26 @@ const includeUser = { user: true } satisfies Prisma.BarberInclude;
 @Injectable()
 export class BarbersRepository implements IBarbersRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  async create(data: CreateBarberData): Promise<BarberEntity> {
+    try {
+      const record = await this.prisma.barber.create({
+        data,
+        include: includeUser,
+      });
+      return this.toEntity(record);
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'Este usuário já possui um cadastro de barbeiro.',
+        );
+      }
+      throw e;
+    }
+  }
 
   async findById(id: string): Promise<BarberEntity | null> {
     const record = await this.prisma.barber.findFirst({

@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { IUsersRepository } from '../../users/domain/users.repository.interface';
 import { ISessionsRepository } from '../domain/sessions.repository.interface';
 import { ITokenService } from '../domain/token.service.interface';
-import { hashToken } from './token-hash.util';
+import { hashToken } from '../../../shared/utils/token.util';
 import { REFRESH_TOKEN_TTL_MS, TokenPair } from './issue-tokens.service';
 
 @Injectable()

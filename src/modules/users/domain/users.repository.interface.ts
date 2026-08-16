@@ -14,6 +14,8 @@ export interface UpdateUserData {
   phone?: string;
   avatarUrl?: string;
   avatarStorageKey?: string;
+  passwordHash?: string;
+  role?: UserRole;
 }
 
 export abstract class IUsersRepository {
