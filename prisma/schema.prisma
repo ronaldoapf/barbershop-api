@@ -114,9 +114,10 @@ model Barber {
   createdAt            DateTime  @default(now()) @map("created_at")
   disabledAt           DateTime? @map("disabled_at")
 
-  user         User                 @relation(fields: [userId], references: [id])
-  workingHours BarberWorkingHours[]
-  appointments Appointment[]        @relation("BarberAppointments")
+  user           User                 @relation(fields: [userId], references: [id])
+  workingHours   BarberWorkingHours[]
+  appointments   Appointment[]        @relation("BarberAppointments")
+  barberServices BarberService[]
 
   @@map("barbers")
 }
@@ -135,8 +136,22 @@ model Service {
   disabledAt      DateTime?  @map("disabled_at")
 
   appointmentServices AppointmentService[]
+  barberServices      BarberService[]
 
   @@map("services")
+}
+
+model BarberService {
+  id        String   @id @default(uuid())
+  barberId  String   @map("barber_id")
+  serviceId String   @map("service_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  barber  Barber  @relation(fields: [barberId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([barberId, serviceId])
+  @@map("barber_services")
 }
 
 model BarberWorkingHours {

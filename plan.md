@@ -13,6 +13,7 @@ Six decisions were resolved with the user before finalizing this plan:
 4. **WhatsApp integration scope**: this repo only exposes `ServiceApiKeyGuard`-protected routes on the existing `appointments`/`users` controllers, reusing the same use cases platform bookings use. No chatbot, NLP, or WhatsApp-client code belongs in this repo — that's a separate external service.
 5. **Existing-user barber promotion**: `Barber` is a hard 1:1 extension of `User` (single `role` field, no multi-role) — there's no such thing as a "barber with no user." So `send-invite.use-case.ts` first looks up the invited email via `IUsersRepository.findByEmail`. Not found → behaves as decision #3 describes (new `User`, `role: BARBER`, no password). Found with `role: CUSTOMER` → reuses that `userId` for the `BarberInvite` and leaves `role` untouched until acceptance (so an unaccepted invite doesn't silently reclassify an active customer). Found with `role: BARBER` or `OWNER` → `ConflictException`. `accept-invite.use-case.ts` always sets `role: BARBER` on acceptance regardless of path, and only runs the "set password" step when the user doesn't already have a `passwordHash` — an existing customer keeps their current password.
 6. **No queue infra yet**: `send-invite.use-case.ts`/`resend-invite.use-case.ts` call `MailService` directly and `await` the send inline in the request cycle — no `QueueService`/BullMQ. The `bullmq`/`ioredis`/`@nestjs/bullmq` packages are dropped from the Phase 0 install list; queue infrastructure is deferred until a phase actually needs true background/deferred work (none currently does — an invite email is a single Resend API call, acceptable to await inline).
+7. **Barber↔service capability** (added after Phase 5, not in the original six): `spec-en.md` never models which services a given barber can perform — the catalog (`Service`) is barbershop-wide and commission is a flat per-barber percentage (§3.2/§4.3), with no mention of a capability restriction anywhere in §3–§6. Rather than assume every barber can perform every service (which Phase 8's booking flow would otherwise silently do), add an explicit `BarberService` join table (new migration + CHANGELOG entry, built in the new **Phase 5.5**). Resolved with the user: (a) enforcement is a **hard block** — `get-available-slots`/`create-appointment` in Phase 8 reject any requested `serviceId` not assigned to the chosen barber; (b) a newly created `Barber` starts with **zero** assigned services (explicit opt-in, not "all active services by default") — `accept-invite.use-case.ts` from Phase 4 is unaffected, assignment happens afterward; (c) only `OWNER` manages assignments, matching the existing commission/catalog-management pattern; (d) unlike every other delete in this codebase, unassigning a service from a barber is a **physical delete** of the join row, not a soft delete — `BarberService` is a pure current-state relation with no standalone business history to preserve (unlike `User`/`Service`/`Appointment`), so the "soft deletes mandatory" rule doesn't apply to it. This is a deliberate, documented exception, not an oversight.
 
 ---
 
@@ -93,6 +94,23 @@ Independent of appointments but required before Phase 8 (appointments snapshot `
 - **application/**: `create-service.use-case.ts`, `update-service.use-case.ts`, `list-services.use-case.ts` (non-OWNER callers see only `ACTIVE`), `deactivate-service.use-case.ts` (sets `status: INACTIVE`, distinct from soft delete).
 - **dto/**: `create-service.dto.ts`, `update-service.dto.ts`, `service-response.dto.ts`.
 - **infrastructure/**: `services.repository.ts`, `services.controller.ts` (`POST/PATCH/DELETE` OWNER via existing `@Roles`/`RolesGuard`; `GET` any authenticated user), `services.module.ts`.
+- **Added after Phase 5.5**: `POST /services` accepts an optional `barberIds: string[]`, letting the `OWNER` assign every capable barber in the same call that creates the service — a convenience for the common case of "this service, these barbers do it" instead of a mandatory create-then-assign-N-times sequence. Implemented entirely inside `services.repository.ts`'s `create()` (wraps `service.create` + `barberService.createMany` — deduped, empty array treated as none — in one `$transaction`, catches Prisma `P2003` → `NotFoundException` if any `barberId` doesn't exist) rather than by having `ServicesModule` import `BarberServicesModule` — that direction would create a module cycle, since `BarberServicesModule` already imports `ServicesModule`. `barber-services.controller.ts`'s own assign/unassign/list endpoints are unaffected and remain the way to manage capability after creation.
+
+---
+
+## Phase 5.5 — `barber-services` module (barber↔service capability)
+
+Per decision #7. Independent of `working-hours`, but must land before Phase 8, which enforces it.
+
+- **Schema change** (new migration, append CHANGELOG entry): new `BarberService` model — `id`, `barberId` (FK → `Barber`), `serviceId` (FK → `Service`), `createdAt`, `@@unique([barberId, serviceId])`, `@@map("barber_services")`. Add the inverse relations (`barberServices BarberService[]`) on `Barber` and `Service`.
+- **domain/**: `barber-service.entity.ts`; `barber-services.repository.interface.ts` (`abstract class IBarberServicesRepository`: `assign(barberId, serviceId)`, `unassign(barberId, serviceId)` — physical delete per decision #7d, `listByBarber(barberId): Promise<ServiceEntity[]>` joined against `Service` for display, `listServiceIdsByBarber(barberId): Promise<string[]>` — the fast-path method Phase 8 calls to validate a requested service set).
+- **application/**:
+  - `assign-service-to-barber.use-case.ts` (OWNER-only): validates the barber exists via `IBarbersRepository.findById` and the service exists via `IServicesRepository.findById`, then calls `repository.assign`; duplicate assignment (`P2002` at the repository layer) rethrown as `ConflictException`.
+  - `unassign-service-from-barber.use-case.ts` (OWNER-only): calls `repository.unassign` — no-op-safe if the row doesn't exist (Prisma `P2025` mapped to `NotFoundException` at the repository layer, mirroring the global `DatabaseExceptionFilter` convention).
+  - `list-barber-services.use-case.ts` (any authenticated user — customers need this to know what a barber offers before booking): returns `repository.listByBarber(barberId)`.
+- **dto/**: `assign-service.dto.ts` (`serviceId: string`), reuses Phase 5's `ServiceResponseDto` for the list response (no new response DTO needed — a barber's assigned services *are* `Service` records, not a distinct snapshot).
+- **infrastructure/**: `barber-services.repository.ts` (Prisma impl, imports `IBarbersRepository`-independent — talks to `prisma.barberService` directly), `barber-services.controller.ts` — routes nested under barbers, per REST convention: `GET /barbers/:barberId/services` (any authenticated user), `POST /barbers/:barberId/services` (OWNER, body `{ serviceId }`), `DELETE /barbers/:barberId/services/:serviceId` (OWNER); `barber-services.module.ts` imports `BarbersModule` + `ServicesModule` (for their exported repository interfaces) so the use cases can validate barber/service existence without duplicating lookup logic.
+- Unit tests per use case, mocking `IBarberServicesRepository` (+ `IBarbersRepository`/`IServicesRepository` where existence is checked).
 
 ---
 
@@ -117,14 +135,14 @@ Independent of appointments but required before Phase 8 (appointments snapshot `
 
 ## Phase 8 — `appointments` module (core, concurrency-critical)
 
-Depends on Phases 3, 5, 6. Includes the **schema change** decided above.
+Depends on Phases 3, 5, 5.5, 6. Includes the **schema change** decided above.
 
 - **Schema change** (new migration, append CHANGELOG entry): add `commissionPercentageApplied Decimal @db.Decimal(5,2)` and `commissionAmount Int` to `AppointmentService`, both nullable until an appointment item is completed.
 - **`src/shared/guards/`**: `appointment-ownership.guard.ts` (verifies `barberId` on the target appointment matches the authenticated barber for writes; OWNER bypasses), `service-api-key.guard.ts` (generic service-to-service auth, reused by Phase 10).
 - **domain/**: `appointment.entity.ts`, `appointment-service.entity.ts` (snapshot entity, now including the commission fields), `appointments.repository.interface.ts` — key method `createWithConflictCheck(data): Promise<AppointmentEntity>` that internally wraps the conflict re-check + insert in one `$transaction` and throws `ConflictException` on overlap; scoped read methods (`findByIdScoped(id, requester)`) so spec §2's automatic barberId/customerId query scoping is enforced at the repository boundary, not just the guard.
 - **application/**:
-  - `get-available-slots.use-case.ts` — combines Phase 6's availability window with existing `PENDING`/`CONFIRMED` appointments and the sum of requested `Service.durationMinutes` to produce dynamic (non-fixed-grid) slots.
-  - `create-appointment.use-case.ts` — thin orchestration calling `createWithConflictCheck`; all transaction mechanics live in `infrastructure/appointments.repository.ts` (use cases can't import `@prisma/client`).
+  - `get-available-slots.use-case.ts` — first validates every requested `serviceId` is in `IBarberServicesRepository.listServiceIdsByBarber(barberId)` (decision #7a hard block; `BadRequestException` otherwise), then combines Phase 6's availability window with existing `PENDING`/`CONFIRMED` appointments and the sum of requested `Service.durationMinutes` to produce dynamic (non-fixed-grid) slots.
+  - `create-appointment.use-case.ts` — same barber-capability check as above (decision #7a) before calling `createWithConflictCheck`; thin orchestration otherwise, all transaction mechanics live in `infrastructure/appointments.repository.ts` (use cases can't import `@prisma/client`).
   - `confirm-appointment.use-case.ts`, `cancel-appointment.use-case.ts` (records `cancellationReason`/`cancelledBy`/`cancelledAt`), `mark-no-show.use-case.ts`.
   - `complete-appointment.use-case.ts` — **the atomicity-critical one**, implementing decision #2: in a single `$transaction`, sets `status: COMPLETED`, computes and persists `commissionPercentageApplied`/`commissionAmount` per `AppointmentService` row (0 if `redeemedWithPoints` and `Setting['commission_on_redeemed_service']` is false), and — via an injected `ILoyaltyRepository` — writes the `LoyaltyTransaction` + updates `User.loyaltyPoints` for earned/redeemed points. Emits `appointment.completed` afterward for non-critical side effects only.
 - **dto/**: `create-appointment.dto.ts` (barberId, serviceIds[], startsAt), `available-slots-query.dto.ts`, `appointment-response.dto.ts`, `cancel-appointment.dto.ts`, `complete-appointment.dto.ts` (which `AppointmentService` items are `redeemedWithPoints`, decided by the barber at completion time).
@@ -159,6 +177,7 @@ Per decision #4: no dedicated `whatsapp-integration` module.
 | Concern | Phase | Where |
 |---|---|---|
 | `JwtAuthGuard`/`RolesGuard` | 2 | `src/shared/guards/` |
+| `BarberService` capability table | 5.5 | `prisma/schema.prisma`, `barber-services.repository.ts` |
 | Resend / `MailService` | 4 | `src/shared/mail/` |
 | S3/R2 `StorageService` | 7 | `src/shared/infrastructure/services/` |
 | `AppointmentOwnershipGuard` / `ServiceApiKeyGuard` | 8 | `src/shared/guards/` |

@@ -11,6 +11,8 @@ import { AuthModule } from './modules/auth/infrastructure/auth.module';
 import { SettingsModule } from './modules/settings/infrastructure/settings.module';
 import { BarbersModule } from './modules/barbers/infrastructure/barbers.module';
 import { BarberInvitesModule } from './modules/barber-invites/infrastructure/barber-invites.module';
+import { ServicesModule } from './modules/services/infrastructure/services.module';
+import { BarberServicesModule } from './modules/barber-services/infrastructure/barber-services.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { BarberInvitesModule } from './modules/barber-invites/infrastructure/bar
     SettingsModule,
     BarbersModule,
     BarberInvitesModule,
+    ServicesModule,
+    BarberServicesModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: DatabaseExceptionFilter }],
