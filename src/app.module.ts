@@ -13,6 +13,7 @@ import { BarbersModule } from './modules/barbers/infrastructure/barbers.module';
 import { BarberInvitesModule } from './modules/barber-invites/infrastructure/barber-invites.module';
 import { ServicesModule } from './modules/services/infrastructure/services.module';
 import { BarberServicesModule } from './modules/barber-services/infrastructure/barber-services.module';
+import { WorkingHoursModule } from './modules/working-hours/infrastructure/working-hours.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { BarberServicesModule } from './modules/barber-services/infrastructure/b
     BarberInvitesModule,
     ServicesModule,
     BarberServicesModule,
+    WorkingHoursModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: DatabaseExceptionFilter }],
