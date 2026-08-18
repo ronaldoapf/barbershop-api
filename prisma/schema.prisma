@@ -195,15 +195,17 @@ model Appointment {
 }
 
 model AppointmentService {
-  id                 String   @id @default(uuid())
-  appointmentId      String   @map("appointment_id")
-  serviceId          String   @map("service_id")
-  serviceName        String   @map("service_name")
-  price              Int
-  durationMinutes    Int      @map("duration_minutes")
-  pointsEarned       Int      @default(0) @map("points_earned")
-  redeemedWithPoints Boolean  @default(false) @map("redeemed_with_points")
-  createdAt          DateTime @default(now()) @map("created_at")
+  id                          String   @id @default(uuid())
+  appointmentId               String   @map("appointment_id")
+  serviceId                   String   @map("service_id")
+  serviceName                 String   @map("service_name")
+  price                       Int
+  durationMinutes             Int      @map("duration_minutes")
+  pointsEarned                Int      @default(0) @map("points_earned")
+  redeemedWithPoints          Boolean  @default(false) @map("redeemed_with_points")
+  commissionPercentageApplied Decimal? @map("commission_percentage_applied") @db.Decimal(5, 2)
+  commissionAmount            Int?     @map("commission_amount")
+  createdAt                   DateTime @default(now()) @map("created_at")
 
   appointment Appointment @relation(fields: [appointmentId], references: [id])
   service     Service     @relation(fields: [serviceId], references: [id])

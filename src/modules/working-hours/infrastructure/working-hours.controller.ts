@@ -22,10 +22,12 @@ import { UserEntity } from '../../users/domain/user.entity';
 import { GetAvailabilityWindowUseCase } from '../application/get-availability-window.use-case';
 import { ListWorkingHoursUseCase } from '../application/list-working-hours.use-case';
 import { SetDateExceptionUseCase } from '../application/set-date-exception.use-case';
+import { SetDefaultScheduleUseCase } from '../application/set-default-schedule.use-case';
 import { SetWeeklyHoursUseCase } from '../application/set-weekly-hours.use-case';
 import { AvailabilityWindowResponseDto } from '../dto/availability-window-response.dto';
 import { GetAvailabilityQueryDto } from '../dto/get-availability-query.dto';
 import { SetDateExceptionDto } from '../dto/set-date-exception.dto';
+import { SetDefaultScheduleDto } from '../dto/set-default-schedule.dto';
 import { SetWeeklyHoursDto } from '../dto/set-weekly-hours.dto';
 import { WorkingHoursResponseDto } from '../dto/working-hours-response.dto';
 
@@ -37,6 +39,7 @@ export class WorkingHoursController {
   constructor(
     private readonly setWeeklyHoursUseCase: SetWeeklyHoursUseCase,
     private readonly setDateExceptionUseCase: SetDateExceptionUseCase,
+    private readonly setDefaultScheduleUseCase: SetDefaultScheduleUseCase,
     private readonly listWorkingHoursUseCase: ListWorkingHoursUseCase,
     private readonly getAvailabilityWindowUseCase: GetAvailabilityWindowUseCase,
   ) {}
@@ -66,6 +69,25 @@ export class WorkingHoursController {
       new Date(query.date),
     );
     return new AvailabilityWindowResponseDto(window);
+  }
+
+  @Post(':barberId/default-schedule')
+  @ApiOperation({
+    summary:
+      'Set up the recurring weekly schedule in one call (defaults to Monday-Friday working, weekend off)',
+  })
+  @ApiResponse({ status: 200, type: WorkingHoursResponseDto, isArray: true })
+  async setDefaultSchedule(
+    @CurrentUser() user: UserEntity,
+    @Param('barberId') barberId: string,
+    @Body() dto: SetDefaultScheduleDto,
+  ): Promise<WorkingHoursResponseDto[]> {
+    const entries = await this.setDefaultScheduleUseCase.execute(
+      user,
+      barberId,
+      dto,
+    );
+    return entries.map((entry) => new WorkingHoursResponseDto(entry));
   }
 
   @Put(':barberId/weekly/:dayOfWeek')

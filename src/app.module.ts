@@ -5,6 +5,7 @@ import { MailModule } from './shared/mail/mail.module';
 import { APP_FILTER } from '@nestjs/core';
 import { DatabaseExceptionFilter } from './shared/filters/database-exception.filter';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { HealthController } from './shared/infrastructure/health.controller';
 import { UsersModule } from './modules/users/infrastructure/users.module';
 import { AuthModule } from './modules/auth/infrastructure/auth.module';
@@ -14,10 +15,12 @@ import { BarberInvitesModule } from './modules/barber-invites/infrastructure/bar
 import { ServicesModule } from './modules/services/infrastructure/services.module';
 import { BarberServicesModule } from './modules/barber-services/infrastructure/barber-services.module';
 import { WorkingHoursModule } from './modules/working-hours/infrastructure/working-hours.module';
+import { AppointmentsModule } from './modules/appointments/infrastructure/appointments.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    EventEmitterModule.forRoot(),
     PrismaModule,
     BcryptModule,
     MailModule,
@@ -29,6 +32,7 @@ import { WorkingHoursModule } from './modules/working-hours/infrastructure/worki
     ServicesModule,
     BarberServicesModule,
     WorkingHoursModule,
+    AppointmentsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: DatabaseExceptionFilter }],
