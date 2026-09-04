@@ -76,6 +76,7 @@ describe('CreateAppointmentUseCase', () => {
     pointsRequired: 0,
     createdAt: new Date(),
     disabledAt: null,
+    barbers: [],
   };
 
   const createdAppointment = { id: 'appointment-1' };
@@ -146,6 +147,17 @@ describe('CreateAppointmentUseCase', () => {
       },
     );
     expect(result).toBe(createdAppointment);
+  });
+
+  it('tags the appointment with the given source instead of the PLATFORM default', async () => {
+    await useCase.execute('customer-1', {
+      ...validInput,
+      source: AppointmentSource.WHATSAPP,
+    });
+
+    expect(appointmentsRepository.createWithConflictCheck).toHaveBeenCalledWith(
+      expect.objectContaining({ source: AppointmentSource.WHATSAPP }),
+    );
   });
 
   it('throws NotFoundException when the barber does not exist', async () => {

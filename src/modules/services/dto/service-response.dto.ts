@@ -2,6 +2,14 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ItemStatus } from '../domain/item-status.enum';
 import { ServiceEntity } from '../domain/service.entity';
 
+class ServiceBarberDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  name: string;
+}
+
 export class ServiceResponseDto {
   @ApiProperty()
   id: string;
@@ -33,6 +41,9 @@ export class ServiceResponseDto {
   @ApiProperty()
   createdAt: Date;
 
+  @ApiProperty({ type: [ServiceBarberDto] })
+  barbers: ServiceBarberDto[];
+
   constructor(entity: ServiceEntity) {
     this.id = entity.id;
     this.name = entity.name;
@@ -44,5 +55,6 @@ export class ServiceResponseDto {
     this.pointsEarned = entity.pointsEarned;
     this.pointsRequired = entity.pointsRequired;
     this.createdAt = entity.createdAt;
+    this.barbers = entity.barbers;
   }
 }

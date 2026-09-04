@@ -18,6 +18,7 @@ export interface CreateAppointmentInput {
   barberId: string;
   serviceIds: string[];
   startsAt: Date;
+  source?: AppointmentSource;
 }
 
 @Injectable()
@@ -101,7 +102,7 @@ export class CreateAppointmentUseCase {
       startsAt: input.startsAt,
       endsAt,
       totalAmount,
-      source: AppointmentSource.PLATFORM,
+      source: input.source ?? AppointmentSource.PLATFORM,
       services: resolvedServices.map((service) => ({
         serviceId: service.id,
         serviceName: service.name,

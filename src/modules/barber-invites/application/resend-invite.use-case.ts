@@ -33,6 +33,11 @@ export class ResendInviteUseCase {
     if (!user) {
       throw new NotFoundException('Usuário não encontrado.');
     }
+    if (!user.email) {
+      throw new ConflictException(
+        'Usuário associado ao convite não possui e-mail cadastrado.',
+      );
+    }
 
     const expiryDaysRaw = await this.getSettingUseCase.execute(
       'barber_invite_expiry_days',

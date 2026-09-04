@@ -3,7 +3,7 @@ import { UserRole } from './user-role.enum';
 export class UserEntity {
   id!: string;
   name!: string;
-  email!: string;
+  email!: string | null;
   phone!: string | null;
   passwordHash!: string | null;
   role!: UserRole;

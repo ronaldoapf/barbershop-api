@@ -12,4 +12,5 @@ export class ServiceEntity {
   pointsRequired!: number;
   createdAt!: Date;
   disabledAt!: Date | null;
+  barbers!: { id: string; name: string }[];
 }

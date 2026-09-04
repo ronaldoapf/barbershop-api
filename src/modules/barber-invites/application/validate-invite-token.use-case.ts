@@ -39,6 +39,11 @@ export class ValidateInviteTokenUseCase {
     if (!user) {
       throw new NotFoundException('Usuário não encontrado.');
     }
+    if (!user.email) {
+      throw new ConflictException(
+        'Usuário associado ao convite não possui e-mail cadastrado.',
+      );
+    }
 
     return { name: user.name, email: user.email, expiresAt: invite.expiresAt };
   }

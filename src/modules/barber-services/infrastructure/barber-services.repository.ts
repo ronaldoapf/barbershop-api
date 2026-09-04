@@ -79,6 +79,7 @@ export class BarberServicesRepository implements IBarberServicesRepository {
       pointsRequired: record.pointsRequired,
       createdAt: record.createdAt,
       disabledAt: record.disabledAt,
+      barbers: [],
     };
   }
 }

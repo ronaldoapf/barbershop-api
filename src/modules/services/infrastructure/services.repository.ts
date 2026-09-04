@@ -11,6 +11,23 @@ import {
 import { ItemStatus } from '../domain/item-status.enum';
 import { ServiceEntity } from '../domain/service.entity';
 
+const barbersInclude = {
+  barberServices: {
+    select: {
+      barber: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.ServiceInclude;
+
 @Injectable()
 export class ServicesRepository implements IServicesRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -55,7 +72,9 @@ export class ServicesRepository implements IServicesRepository {
   async findById(id: string): Promise<ServiceEntity | null> {
     const record = await this.prisma.service.findFirst({
       where: { id, disabledAt: null },
+      include: barbersInclude,
     });
+
     return record ? this.toEntity(record) : null;
   }
 
@@ -76,6 +95,7 @@ export class ServicesRepository implements IServicesRepository {
         skip,
         take,
         orderBy: { order: 'asc' },
+        include: barbersInclude,
       }),
       this.prisma.service.count({ where }),
     ]);
@@ -95,7 +115,14 @@ export class ServicesRepository implements IServicesRepository {
     });
   }
 
-  private toEntity(record: Service): ServiceEntity {
+  private toEntity(
+    record: Service & {
+      barberServices?: {
+        barber: { id: string; user: { name: string } };
+      }[];
+    },
+  ): ServiceEntity {
+    console.log("record.barberServices", record.barberServices)
     return {
       id: record.id,
       name: record.name,
@@ -108,6 +135,11 @@ export class ServicesRepository implements IServicesRepository {
       pointsRequired: record.pointsRequired,
       createdAt: record.createdAt,
       disabledAt: record.disabledAt,
+      barbers:
+        record.barberServices?.map(({ barber }) => ({
+          id: barber.id,
+          name: barber.user.name,
+        })) ?? [],
     };
   }
 }

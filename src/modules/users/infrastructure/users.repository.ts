@@ -27,6 +27,13 @@ export class UsersRepository implements IUsersRepository {
     return record ? this.toEntity(record) : null;
   }
 
+  async findByPhone(phone: string): Promise<UserEntity | null> {
+    const record = await this.prisma.user.findFirst({
+      where: { phone, disabledAt: null },
+    });
+    return record ? this.toEntity(record) : null;
+  }
+
   async create(data: CreateUserData): Promise<UserEntity> {
     try {
       const record = await this.prisma.user.create({ data });
@@ -36,6 +43,12 @@ export class UsersRepository implements IUsersRepository {
         e instanceof Prisma.PrismaClientKnownRequestError &&
         e.code === 'P2002'
       ) {
+        const target = (e.meta?.target as string[] | undefined) ?? [];
+        if (target.includes('phone')) {
+          throw new ConflictException(
+            'Já existe um usuário com este telefone.',
+          );
+        }
         throw new ConflictException('Já existe um usuário com este e-mail.');
       }
       throw e;

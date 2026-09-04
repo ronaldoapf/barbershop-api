@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AppointmentOwnershipGuard } from '../../../shared/guards/appointment-ownership.guard';
+import { ServiceApiKeyGuard } from '../../../shared/guards/service-api-key.guard';
 import { BarberServicesModule } from '../../barber-services/infrastructure/barber-services.module';
 import { BarbersModule } from '../../barbers/infrastructure/barbers.module';
 import { ServicesModule } from '../../services/infrastructure/services.module';
@@ -16,6 +17,7 @@ import { MarkNoShowUseCase } from '../application/mark-no-show.use-case';
 import { IAppointmentsRepository } from '../domain/appointments.repository.interface';
 import { AppointmentsController } from './appointments.controller';
 import { AppointmentsRepository } from './appointments.repository';
+import { WhatsappAppointmentsController } from './whatsapp-appointments.controller';
 
 @Module({
   imports: [
@@ -25,10 +27,11 @@ import { AppointmentsRepository } from './appointments.repository';
     WorkingHoursModule,
     SettingsModule,
   ],
-  controllers: [AppointmentsController],
+  controllers: [AppointmentsController, WhatsappAppointmentsController],
   providers: [
     { provide: IAppointmentsRepository, useClass: AppointmentsRepository },
     AppointmentOwnershipGuard,
+    ServiceApiKeyGuard,
     CreateAppointmentUseCase,
     GetAvailableSlotsUseCase,
     GetAppointmentUseCase,

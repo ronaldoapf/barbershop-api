@@ -9,8 +9,8 @@ export class UserResponseDto {
   @ApiProperty()
   name: string;
 
-  @ApiProperty()
-  email: string;
+  @ApiPropertyOptional({ nullable: true })
+  email: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   phone: string | null;

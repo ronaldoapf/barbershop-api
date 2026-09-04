@@ -15,11 +15,20 @@ async function bootstrap() {
     }),
   );
 
+  app.enableCors({
+    origin: ["http://localhost:5173"],
+    credentials: true,
+  });
+
   const config = new DocumentBuilder()
     .setTitle('Barbershop API')
     .setDescription('API de gerenciamento de barbearia')
     .setVersion('1.0')
     .addBearerAuth()
+    .addApiKey(
+      { type: 'apiKey', name: 'x-api-key', in: 'header' },
+      'service-api-key',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

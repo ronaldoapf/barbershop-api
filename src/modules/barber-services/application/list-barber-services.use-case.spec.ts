@@ -48,6 +48,7 @@ describe('ListBarberServicesUseCase', () => {
       pointsRequired: 0,
       createdAt: new Date(),
       disabledAt: null,
+      barbers: [],
     },
   ];
 

@@ -56,6 +56,7 @@ describe('AssignServiceToBarberUseCase', () => {
     pointsRequired: 0,
     createdAt: new Date(),
     disabledAt: null,
+    barbers: [],
   };
 
   beforeEach(async () => {
