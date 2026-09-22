@@ -20,14 +20,14 @@ O sistema usa uma entidade única `User` com um campo `role`, que pode ser:
 
 | Papel | Descrição |
 |---|---|
-| `OWNER` | Barbeiro administrador. Acesso total: gerencia serviços, convida barbeiros, vê todos os agendamentos, ajusta comissões. |
+| `ADMIN` | Barbeiro administrador. Acesso total: gerencia serviços, convida barbeiros, vê todos os agendamentos, ajusta comissões. |
 | `BARBER` | Barbeiro comum. Só vê e gerencia os próprios agendamentos, horários de trabalho e comissão (leitura). |
 | `CUSTOMER` | Cliente. Agenda horários, vê seus próprios agendamentos e saldo de pontos de fidelidade. |
 
 ### Mecanismo de autorização
-- **`RolesGuard` + `@Roles(...)`** — bloqueia rotas inteiras por papel (ex: só `OWNER` pode criar serviços ou convidar barbeiros).
-- **Filtro automático no service** — para leitura/listagem, toda query de `BARBER` aplica automaticamente `WHERE barberId = <barberId do token>`; `CUSTOMER` filtra por `customerId`; `OWNER` vê tudo. Isso evita até vazamento de existência de recursos de terceiros.
-- **`AppointmentOwnershipGuard`** — para escrita (update/delete), verifica que o `barberId` do recurso bate com o do usuário autenticado antes de permitir a mutação (exceto `OWNER`, que tem acesso irrestrito).
+- **`RolesGuard` + `@Roles(...)`** — bloqueia rotas inteiras por papel (ex: só `ADMIN` pode criar serviços ou convidar barbeiros).
+- **Filtro automático no service** — para leitura/listagem, toda query de `BARBER` aplica automaticamente `WHERE barberId = <barberId do token>`; `CUSTOMER` filtra por `customerId`; `ADMIN` vê tudo. Isso evita até vazamento de existência de recursos de terceiros.
+- **`AppointmentADMINshipGuard`** — para escrita (update/delete), verifica que o `barberId` do recurso bate com o do usuário autenticado antes de permitir a mutação (exceto `ADMIN`, que tem acesso irrestrito).
 - **`ServiceApiKeyGuard`** — guard separado para rotas chamadas pelo módulo externo de WhatsApp, autenticado por API key de serviço em vez de JWT de usuário.
 
 ---
@@ -42,7 +42,7 @@ Entidade central de identidade — unifica cliente, barbeiro e administrador em 
 | `id` | Identificador único |
 | `name`, `email`, `phone` | Dados de contato |
 | `passwordHash` | Opcional — cliente via WhatsApp pode não ter senha |
-| `role` | `CUSTOMER`, `BARBER` ou `OWNER` |
+| `role` | `CUSTOMER`, `BARBER` ou `ADMIN` |
 | `loyaltyPoints` | Saldo de pontos denormalizado (para leitura rápida) |
 | `avatarUrl` / `avatarStorageKey` | Foto de perfil |
 | `disabledAt` | Soft delete / desativação de conta |
@@ -50,12 +50,12 @@ Entidade central de identidade — unifica cliente, barbeiro e administrador em 
 Login suporta **senha local** e **OAuth Google** simultaneamente (tabela `Account` guarda o vínculo com o provedor).
 
 ### 3.2 `Barber`
-Perfil estendido, em relação 1:1 com `User`, usado apenas por quem tem `role: BARBER` ou `OWNER`. Mantém `User` enxuto e isola dados específicos de barbeiro.
+Perfil estendido, em relação 1:1 com `User`, usado apenas por quem tem `role: BARBER` ou `ADMIN`. Mantém `User` enxuto e isola dados específicos de barbeiro.
 
 | Campo | Descrição |
 |---|---|
 | `userId` | FK única para `User` |
-| `commissionPercentage` | Percentual fixo de comissão do barbeiro (não varia por serviço). Começa com valor padrão na criação e é ajustado pelo `OWNER` depois. |
+| `commissionPercentage` | Percentual fixo de comissão do barbeiro (não varia por serviço). Começa com valor padrão na criação e é ajustado pelo `ADMIN` depois. |
 
 ### 3.3 `BarberInvite`
 Controla o convite de novos barbeiros, feito por e-mail.
@@ -136,15 +136,15 @@ Tabela genérica de configuração (key-value), para parâmetros administráveis
 ## 4. Regras de Negócio
 
 ### 4.1 Barbeiros e convites
-- Apenas `OWNER` pode cadastrar e convidar outros barbeiros.
+- Apenas `ADMIN` pode cadastrar e convidar outros barbeiros.
 - Convite é feito por **e-mail**, com link contendo token de uso único e validade (7 dias sugeridos).
 - Ao aceitar o convite, o barbeiro define sua senha, a conta é ativada e o registro `Barber` é criado com `commissionPercentage` no valor padrão do sistema.
-- O `OWNER` ajusta a comissão do barbeiro separadamente, depois do aceite.
+- O `ADMIN` ajusta a comissão do barbeiro separadamente, depois do aceite.
 - Convites expirados podem ser reenviados, invalidando o token anterior.
 
 ### 4.2 Escopo de gerenciamento
 - Um `BARBER` só pode ver e gerenciar agendamentos, horários de trabalho e dados relacionados a si mesmo.
-- Comissão é **somente leitura** para o `BARBER` — apenas o `OWNER` pode alterá-la.
+- Comissão é **somente leitura** para o `BARBER` — apenas o `ADMIN` pode alterá-la.
 
 ### 4.3 Comissão
 - Comissão é um **percentual único fixo por barbeiro** (não varia por tipo de serviço).
@@ -176,11 +176,11 @@ Tabela genérica de configuração (key-value), para parâmetros administráveis
 
 | Passo | Rota | Quem executa |
 |---|---|---|
-| Convidar | `POST /invites` | `OWNER` |
+| Convidar | `POST /invites` | `ADMIN` |
 | Validar token do link recebido por e-mail | `GET /invites/:token` | Público (via link) |
 | Aceitar convite e definir senha | `POST /invites/:token/accept` | Público (via token) |
-| Reenviar convite expirado | `POST /invites/:id/resend` | `OWNER` |
-| Ajustar comissão do barbeiro | `PATCH /barbers/:id/commission` | `OWNER` |
+| Reenviar convite expirado | `POST /invites/:id/resend` | `ADMIN` |
+| Ajustar comissão do barbeiro | `PATCH /barbers/:id/commission` | `ADMIN` |
 
 ---
 

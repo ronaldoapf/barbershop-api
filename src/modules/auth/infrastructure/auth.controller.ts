@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -6,11 +7,13 @@ import {
   HttpStatus,
   Post,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { RegisterLocalUseCase } from '../application/register-local.use-case';
 import { LoginLocalUseCase } from '../application/login-local.use-case';
 import {
@@ -19,11 +22,19 @@ import {
 } from '../application/login-google.use-case';
 import { RefreshTokenUseCase } from '../application/refresh-token.use-case';
 import { LogoutUseCase } from '../application/logout.use-case';
-import { RequestContext } from '../application/issue-tokens.service';
+import {
+  RequestContext,
+  REFRESH_TOKEN_TTL_MS,
+  TokenPair,
+} from '../application/issue-tokens.service';
+import { ACCESS_TOKEN_TTL_MS } from './jwt-token.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
 import { AuthResponseDto } from '../dto/auth-response.dto';
+
+const ACCESS_TOKEN_COOKIE = 'accessToken';
+const REFRESH_TOKEN_COOKIE = 'refreshToken';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -34,6 +45,7 @@ export class AuthController {
     private readonly loginGoogleUseCase: LoginGoogleUseCase,
     private readonly refreshTokenUseCase: RefreshTokenUseCase,
     private readonly logoutUseCase: LogoutUseCase,
+    private readonly configService: ConfigService,
   ) {}
 
   @Post('register')
@@ -42,11 +54,13 @@ export class AuthController {
   async register(
     @Body() dto: RegisterDto,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponseDto> {
     const tokens = await this.registerLocalUseCase.execute(
       dto,
       requestContext(req),
     );
+    this.setAuthCookies(res, tokens);
     return new AuthResponseDto(tokens);
   }
 
@@ -57,11 +71,13 @@ export class AuthController {
   async login(
     @Body() dto: LoginDto,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponseDto> {
     const tokens = await this.loginLocalUseCase.execute(
       dto,
       requestContext(req),
     );
+    this.setAuthCookies(res, tokens);
     return new AuthResponseDto(tokens);
   }
 
@@ -73,23 +89,43 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Google OAuth callback' })
-  @ApiResponse({ status: 200, type: AuthResponseDto })
+  @ApiResponse({
+    status: 302,
+    description:
+      'Sets the auth cookies and redirects to the frontend callback page',
+  })
   async googleCallback(
     @Req() req: Request & { user: GoogleProfileInput },
-  ): Promise<AuthResponseDto> {
+    @Res() res: Response,
+  ): Promise<void> {
     const tokens = await this.loginGoogleUseCase.execute(
       req.user,
       requestContext(req),
     );
-    return new AuthResponseDto(tokens);
+
+    this.setAuthCookies(res, tokens);
+
+    const frontendUrl = this.configService.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:5173',
+    );
+
+    res.redirect(`${frontendUrl}/auth/callback`);
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate the access/refresh token pair' })
   @ApiResponse({ status: 200, type: AuthResponseDto })
-  async refresh(@Body() dto: RefreshTokenDto): Promise<AuthResponseDto> {
-    const tokens = await this.refreshTokenUseCase.execute(dto.refreshToken);
+  async refresh(
+    @Body() dto: RefreshTokenDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthResponseDto> {
+    const tokens = await this.refreshTokenUseCase.execute(
+      this.extractRefreshToken(dto, req),
+    );
+    this.setAuthCookies(res, tokens);
     return new AuthResponseDto(tokens);
   }
 
@@ -99,8 +135,44 @@ export class AuthController {
     summary: 'Revoke the session behind the given refresh token',
   })
   @ApiResponse({ status: 204 })
-  async logout(@Body() dto: RefreshTokenDto): Promise<void> {
-    await this.logoutUseCase.execute(dto.refreshToken);
+  async logout(
+    @Body() dto: RefreshTokenDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.logoutUseCase.execute(this.extractRefreshToken(dto, req));
+    this.clearAuthCookies(res);
+  }
+
+  private extractRefreshToken(dto: RefreshTokenDto, req: Request): string {
+    const token = dto.refreshToken ?? req.cookies?.refreshToken;
+    if (!token) {
+      throw new BadRequestException('refreshToken must be a string');
+    }
+    return token;
+  }
+
+  private setAuthCookies(res: Response, tokens: TokenPair): void {
+    const secure = this.configService.get<string>('NODE_ENV') === 'production';
+
+    res.cookie(ACCESS_TOKEN_COOKIE, tokens.accessToken, {
+      httpOnly: true,
+      secure,
+      sameSite: 'lax',
+      maxAge: ACCESS_TOKEN_TTL_MS,
+    });
+    res.cookie(REFRESH_TOKEN_COOKIE, tokens.refreshToken, {
+      httpOnly: true,
+      secure,
+      sameSite: 'lax',
+      maxAge: REFRESH_TOKEN_TTL_MS,
+      path: '/auth',
+    });
+  }
+
+  private clearAuthCookies(res: Response): void {
+    res.clearCookie(ACCESS_TOKEN_COOKIE);
+    res.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/auth' });
   }
 }
 

@@ -8,6 +8,8 @@ import {
   RefreshTokenPayload,
 } from '../domain/token.service.interface';
 
+const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
+
 @Injectable()
 export class JwtTokenService implements ITokenService {
   constructor(
@@ -38,3 +40,5 @@ export class JwtTokenService implements ITokenService {
     });
   }
 }
+
+export { ACCESS_TOKEN_TTL_MS };
